@@ -1,0 +1,15 @@
+name: "Setup AWS SAM CLI"
+description: "Setup AWS SAM CLI and add it to the PATH"
+branding:
+  icon: "terminal"
+  color: "orange"
+inputs:
+  version:
+    description: "The AWS SAM CLI version to install"
+    required: false
+  python:
+    description: "The Python interpreter to use for AWS SAM CLI"
+    required: false
+runs:
+  using: "node12"
+  main: "dist/index.js"

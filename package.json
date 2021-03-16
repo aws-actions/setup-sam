@@ -1,0 +1,25 @@
+{
+  "name": "setup-sam",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Action to setup AWS SAM CLI and add it to the PATH",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest && eslint . && prettier --check .",
+    "build": "ncc build index.js --out dist --license licenses.txt",
+    "format": "prettier --write .",
+    "all": "npm run format && npm test && npm run build"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@actions/core": "^1.2.6",
+    "@actions/exec": "^1.0.4",
+    "@actions/io": "^1.0.2"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.27.0",
+    "eslint": "^7.20.0",
+    "jest": "^26.6.3",
+    "prettier": "2.2.1"
+  }
+}
