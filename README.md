@@ -14,20 +14,6 @@ The AWS SAM CLI version to install. Installs the latest version by default.
 
 The Python interpreter to use for AWS SAM CLI. Defaults to `python` on Windows, and `python3` otherwise.
 
-## Testing and Building
-
-Install dependencies:
-
-```shell
-npm install
-```
-
-Then run tests and build:
-
-```shell
-npm run all
-```
-
 ## Security
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#security-disclosures) for more information.
