@@ -49,16 +49,13 @@ function mkdirTemp() {
  * Creates a Python virtual environment.
  *
  * @param {string} python - The Python interpreter to use.
- * @returns {Promise<string>} The path to the virtual environment.
+ * @param {string} venvPath - The virtual environment directory.
  */
-async function createPythonVenv(python) {
-  const venvPath = mkdirTemp();
+async function createPythonVenv(python, venvPath) {
   const pythonPath = await io.which(python, true);
 
   await exec.exec(pythonPath, ["--version"]);
   await exec.exec(pythonPath, ["-m", "venv", venvPath]);
-
-  return venvPath;
 }
 
 /**
@@ -69,7 +66,11 @@ async function createPythonVenv(python) {
  * @returns {Promise<string>} The directory SAM CLI is installed in.
  */
 async function installSamCli(python, version) {
-  const venvPath = await createPythonVenv(python);
+  const tempPath = mkdirTemp();
+
+  // Create virtual environment
+  const venvPath = path.join(tempPath, ".venv");
+  await createPythonVenv(python, venvPath);
 
   // See https://docs.python.org/3/library/venv.html
   const binDir = isWindows() ? "Scripts" : "bin";
@@ -100,7 +101,8 @@ async function installSamCli(python, version) {
   ]);
 
   // Symlink from separate directory so only SAM CLI is added to PATH
-  const symlinkPath = mkdirTemp();
+  const symlinkPath = path.join(tempPath, "bin");
+  fs.mkdirSync(symlinkPath);
   const sam = isWindows() ? "sam.exe" : "sam";
   fs.symlinkSync(path.join(binPath, sam), path.join(symlinkPath, sam));
 
