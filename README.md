@@ -6,6 +6,24 @@ Action to setup [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application
 
 Requires Python 3.6+.
 
+## Example
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/setup-sam@v0
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - run: sam build --use-container
+      - run: sam deploy --no-fail-on-empty-changeset --no-confirm-changeset
+```
+
 ## Inputs
 
 ### `version`
