@@ -25,8 +25,10 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - uses: aws-actions/setup-sam@v0
+      # Build inside Docker containers
       - run: sam build --use-container
-      - run: sam deploy --no-fail-on-empty-changeset --no-confirm-changeset
+      # Prevent prompts and failure when the stack is unchanged
+      - run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
 ```
 
 ## Inputs
