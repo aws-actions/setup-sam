@@ -11,7 +11,10 @@ Requires Python 3.6+.
 Assuming you have `samconfig.toml` at the root of your repository:
 
 ```yaml
-on: push
+on:
+  push:
+    branches:
+      - main
 jobs:
   build:
     runs-on: ubuntu-latest
