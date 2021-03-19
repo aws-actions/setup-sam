@@ -8,7 +8,7 @@ Requires Python 3.6+.
 
 ## Example
 
-Assuming you have `samconfig.toml` at the root of your repository:
+Assuming you have a [`samconfig.toml`](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html) at the root of your repository:
 
 ```yaml
 on:
