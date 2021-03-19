@@ -8,18 +8,20 @@ Requires Python 3.6+.
 
 ## Example
 
+Assuming you have `samconfig.toml` at the root of your repository:
+
 ```yaml
 on: push
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: aws-actions/setup-sam@v0
+      - uses: actions/checkout@v2
       - uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
+      - uses: aws-actions/setup-sam@v0
       - run: sam build --use-container
       - run: sam deploy --no-fail-on-empty-changeset --no-confirm-changeset
 ```
