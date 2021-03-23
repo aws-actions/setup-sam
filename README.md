@@ -6,6 +6,8 @@ Action to setup [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application
 
 Requires Python 3.6+.
 
+_Note: `setup-sam` is currently in `v0`, so while unlikely, we might introduce breaking changes until `v1`._
+
 ## Example
 
 Assuming you have a [`samconfig.toml`](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html) at the root of your repository:
@@ -24,6 +26,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
       - uses: aws-actions/setup-sam@v0
       # Build inside Docker containers
       - run: sam build --use-container
