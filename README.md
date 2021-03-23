@@ -6,7 +6,7 @@ Action to setup [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application
 
 Requires Python 3.6+.
 
-*Note: `setup-sam` is currently in `v0`, so while unlikely, we might introduce breaking changes until `v1`.*
+_Note: `setup-sam` is currently in `v0`, so while unlikely, we might introduce breaking changes until `v1`._
 
 ## Example
 
