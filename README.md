@@ -19,7 +19,7 @@ on:
     branches:
       - main
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
