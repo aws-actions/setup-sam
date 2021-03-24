@@ -1,6 +1,7 @@
 # setup-sam
 
-[![.github/workflows/test.yml](https://github.com/aws-actions/setup-sam/actions/workflows/test.yml/badge.svg)](https://github.com/aws-actions/setup-sam/actions/workflows/test.yml)
+[![Tests](https://github.com/aws-actions/setup-sam/actions/workflows/test.yml/badge.svg)](https://github.com/aws-actions/setup-sam/actions/workflows/test.yml)
+[![CodeQL](https://github.com/aws-actions/setup-sam/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/aws-actions/setup-sam/actions/workflows/codeql-analysis.yml)
 
 Action to setup [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-reference.html#serverless-sam-cli) and add it to the `PATH`.
 
