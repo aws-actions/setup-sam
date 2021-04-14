@@ -7,8 +7,6 @@ Action to setup [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application
 
 Requires Python 3.6+.
 
-_Note: `setup-sam` is currently in `v0`, so while unlikely, we might introduce breaking changes until `v1`._
-
 ## Example
 
 Assuming you have a [`samconfig.toml`](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html) at the root of your repository:
@@ -24,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
-      - uses: aws-actions/setup-sam@v0
+      - uses: aws-actions/setup-sam@v1
       - uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
