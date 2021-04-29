@@ -38,8 +38,8 @@ jobs:
       # Test setup latest version
       - uses: ./
       - run: |
-          LATEST=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
-          sam --version | grep -F "${LATEST}"
+          version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
+          sam --version | grep -F "$version"
         shell: bash
 
       # Test sam init
