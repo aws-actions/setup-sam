@@ -37,7 +37,10 @@ jobs:
 
       # Test setup latest version
       - uses: ./
-      - run: sam --version | grep -Fv 1.18.2
+      - run: |
+          version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
+          sam --version | grep -F "$version"
+        shell: bash
 
       # Test sam init
       - run: sam init --name sam-app --runtime nodejs14.x --dependency-manager npm --app-template hello-world
