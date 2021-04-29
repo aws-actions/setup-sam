@@ -18,17 +18,17 @@ test.each([
   {
     platform: "linux",
     input: {},
-    expected: { version: "1.*", python: "python3" },
+    expected: { version: "*", python: "python3" },
   },
   {
     platform: "darwin",
     input: {},
-    expected: { version: "1.*", python: "python3" },
+    expected: { version: "*", python: "python3" },
   },
   {
     platform: "win32",
     input: {},
-    expected: { version: "1.*", python: "python" },
+    expected: { version: "*", python: "python" },
   },
   {
     platform: "linux",
@@ -38,7 +38,7 @@ test.each([
   {
     platform: "linux",
     input: { python: "/root/Python 1.2.3" },
-    expected: { version: "1.*", python: "/root/Python 1.2.3" },
+    expected: { version: "*", python: "/root/Python 1.2.3" },
   },
   {
     platform: "linux",
