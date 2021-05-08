@@ -31,6 +31,8 @@ const core = __nccwpck_require__(186);
 const exec = __nccwpck_require__(514);
 const io = __nccwpck_require__(436);
 
+const PACKAGE_NAME = "aws-sam-cli";
+
 /**
  * Returns whether the current platform is Windows.
  */
@@ -97,7 +99,7 @@ async function installSamCli(python, version) {
     "pip",
     "install",
     "--upgrade",
-    `aws-sam-cli==${version}`,
+    version ? `${PACKAGE_NAME}==${version}` : PACKAGE_NAME,
   ]);
 
   // Symlink from separate directory so only SAM CLI is added to PATH
@@ -127,7 +129,7 @@ function getInput(name, pattern, defaultValue) {
 }
 
 async function setup() {
-  const version = getInput("version", /^[\d.*]+$/, "1.*");
+  const version = getInput("version", /^[\d.*]*$/, "");
   // python3 isn't standard on Windows
   const defaultPython = isWindows() ? "python" : "python3";
   const python = getInput("python", /^.+$/, defaultPython);
