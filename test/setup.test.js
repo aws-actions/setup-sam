@@ -10,8 +10,6 @@ const io = require("@actions/io");
 
 const setup = require("../lib/setup");
 
-const PACKAGE_NAME = "aws-sam-cli";
-
 afterEach(() => {
   jest.clearAllMocks();
 });
@@ -63,8 +61,8 @@ test.each([
     expect.arrayContaining([
       "install",
       test.input.version
-        ? `${PACKAGE_NAME}==${test.expected.version}`
-        : PACKAGE_NAME,
+        ? `aws-sam-cli==${test.expected.version}`
+        : "aws-sam-cli",
     ])
   );
   expect(core.addPath).toHaveBeenCalledTimes(1);
