@@ -34,8 +34,8 @@ test.each([
   },
   {
     platform: "linux",
-    input: { version: "1.2.3" },
-    expected: { version: "1.2.3", python: "python3" },
+    input: { version: "1.2.*" },
+    expected: { version: "1.2.*", python: "python3" },
   },
   {
     platform: "linux",
