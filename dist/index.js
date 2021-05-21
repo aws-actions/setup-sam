@@ -42,6 +42,8 @@ function isWindows() {
  * Returns a new temporary directory.
  */
 function mkdirTemp() {
+  console.log("hey", process.env.RUNNER_TEMP);
+  console.log("wut", os.tmpdir());
   return fs.mkdtempSync(path.join(os.tmpdir(), "setup-sam-"));
 }
 
