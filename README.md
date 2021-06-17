@@ -34,6 +34,8 @@ jobs:
       - run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
 ```
 
+See [AWS IAM best practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html) for handling AWS credentials.
+
 ## Inputs
 
 ### `version`
