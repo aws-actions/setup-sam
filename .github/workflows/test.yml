@@ -9,8 +9,8 @@ jobs:
     name: npm test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v1
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
       - run: npm ci
       - run: npm test
 
@@ -28,8 +28,8 @@ jobs:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
         with:
           python-version: "3.8"
 
@@ -50,7 +50,7 @@ jobs:
       - run: sam init --name sam-app --runtime nodejs14.x --dependency-manager npm --app-template hello-world
 
       # Test sam build
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v3
         with:
           node-version: "14"
       - run: sam build
