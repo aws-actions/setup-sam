@@ -52,7 +52,7 @@ jobs:
       # Test sam build
       - uses: actions/setup-node@v3
         with:
-          node-version: "16"
+          node-version: "14"
       - run: sam build
         working-directory: ./sam-app
 
