@@ -11,5 +11,5 @@ inputs:
     description: "The Python interpreter to use for AWS SAM CLI"
     required: false
 runs:
-  using: "node12"
+  using: "node16"
   main: "dist/index.js"
