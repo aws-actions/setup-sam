@@ -37,7 +37,7 @@ jobs:
       - uses: aws-actions/setup-sam@v2
         with:
           version: "1.46.0"
-      - run: sam --version | grep -F 1.18.2
+      - run: sam --version | grep -F 1.46.0
 
       # Test setup specific version
       - uses: ./
