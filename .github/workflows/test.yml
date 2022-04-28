@@ -33,6 +33,12 @@ jobs:
         with:
           python-version: "3.8"
 
+      # Test latest published version
+      - uses: aws-actions/setup-sam@v2
+        with:
+          version: "1.46.0"
+      - run: sam --version | grep -F 1.18.2
+
       # Test setup specific version
       - uses: ./
         with:
