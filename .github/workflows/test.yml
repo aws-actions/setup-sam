@@ -31,8 +31,6 @@ jobs:
       - uses: actions/setup-python@v3
         with:
           python-version: "3.8"
-          
-      - run: git config --get remote.origin.url
 
       # Test latest published version
       - uses: aws-actions/setup-sam@v2
