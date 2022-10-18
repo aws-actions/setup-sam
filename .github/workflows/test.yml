@@ -65,6 +65,6 @@ jobs:
       # Doesn't work as-is on macOS or Windows due to licensing:
       # - https://github.com/actions/virtual-environments/issues/17
       # - https://github.com/actions/virtual-environments/issues/1143
-      - if: startsWith(matrix.os, 'ubuntu')
+      - if: startsWith(matrix.os, 'ubuntu') || startsWith(matrix.os, 'windows')
         run: sam build --use-container
         working-directory: ./sam-app
