@@ -1,0 +1,13 @@
+name: Release
+on:
+  workflow_dispatch:
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag --force v2 HEAD
+          git push --force origin v2
