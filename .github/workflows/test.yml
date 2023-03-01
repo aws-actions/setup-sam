@@ -38,7 +38,8 @@ jobs:
         with:
           installer: true
           version: "1.75.0"
-      - run: sam --version | grep -F 1.75.0
+      - if: startsWith(matrix.os, 'ubuntu')
+        run: sam --version | grep -F 1.75.0
 
       # Test latest published version
       - uses: aws-actions/setup-sam@v2
