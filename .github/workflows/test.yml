@@ -32,8 +32,8 @@ jobs:
         with:
           python-version: "3.8"
 
-      # Test installer
-      - uses: ./
+      - name: Test with self-contained installer
+        uses: ./
         with:
           installer: true
           version: "1.75.0"
