@@ -40,7 +40,7 @@ jobs:
       - run: |
           version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
           sam --version | grep -F "$version"
-        shell: bash 
+        shell: bash
 
   integ:
     strategy:
