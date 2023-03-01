@@ -32,6 +32,26 @@ jobs:
         with:
           python-version: "3.8"
 
+      - name: Test official installer (pinned version)
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: ./
+        with:
+          use-installer: true
+          version: "1.71.0"
+      - if: startsWith(matrix.os, 'ubuntu')
+        run: sam --version | grep -F 1.71.0
+
+      - name: Test official installer (latest version)
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: ./
+        with:
+          use-installer: true
+      - if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
+          sam --version | grep -F "$version"
+        shell: bash
+
       # Test latest published version
       - uses: aws-actions/setup-sam@v2
         with:

@@ -21,6 +21,11 @@ test.each([
     expected: { version: "1.*", python: "python3" },
   },
   {
+    platform: "linux",
+    input: { version: "" },
+    expected: { version: "1.*", python: "python3" },
+  },
+  {
     platform: "darwin",
     input: {},
     expected: { version: "1.*", python: "python3" },
