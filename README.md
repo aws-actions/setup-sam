@@ -52,7 +52,7 @@ The Python interpreter to use for AWS SAM CLI. Defaults to `python` on Windows, 
 
 You can use [`actions/setup-python`](https://github.com/actions/setup-python) to automatically set up Python.
 
-### `installer`
+### `use-installer`
 
 > **Note**
 >

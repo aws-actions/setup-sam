@@ -36,7 +36,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: ./
         with:
-          installer: true
+          use-installer: true
           version: "1.71.0"
       - if: startsWith(matrix.os, 'ubuntu')
         run: sam --version | grep -F 1.71.0
@@ -45,7 +45,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: ./
         with:
-          installer: true
+          use-installer: true
       - if: startsWith(matrix.os, 'ubuntu')
         run: |
           version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
