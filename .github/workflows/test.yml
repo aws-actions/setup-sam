@@ -32,6 +32,13 @@ jobs:
         with:
           python-version: "3.8"
 
+      # Test installer
+      - uses: ./
+        with:
+          experimental: true
+          version: "1.75.0"
+      - run: sam --version | grep -F 1.75.0
+
       # Test latest published version
       - uses: aws-actions/setup-sam@v2
         with:
