@@ -128,6 +128,38 @@ function getInput(name, pattern, defaultValue) {
   return value;
 }
 
+/**
+ * Installs SAM CLI using the official installer.
+ *
+ * See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
+ *
+ * @param {string} version - The SAM CLI version to install.
+ * @returns {Promise<string>} The directory SAM CLI is installed in.
+ */
+async function installUsingOfficialInstaller(version) {
+  // TODO: Support more platforms
+  if (os.platform() !== "linux" || os.arch() !== "x64") {
+    // https://nodejs.org/api/os.html
+    core.setFailed("Only Linux x86-64 is supported with installer: true");
+    return;
+  }
+
+  // Refactor
+  const cachedPath = tc.find("sam", version);
+  if (cachedPath) {
+    core.addPath(path.join(cachedPath, "dist"));
+  }
+
+  const url = `https://github.com/aws/aws-sam-cli/releases/download/v${version}/aws-sam-cli-linux-x86_64.zip`;
+  const toolPath = await tc.downloadTool(url);
+  const tempDir = mkdirTemp();
+  // TODO: Support caching
+  const extractedDir = await tc.extractZip(toolPath, tempDir);
+  const binDir = path.join(extractedDir, "dist");
+
+  return binDir;
+}
+
 async function setup() {
   const version = getInput("version", /^[\d.*]+$/, "1.*");
   // python3 isn't standard on Windows
@@ -135,31 +167,9 @@ async function setup() {
   const python = getInput("python", /^.+$/, defaultPython);
   const useInstaller = core.getBooleanInput("installer");
 
-  if (useInstaller) {
-    // TODO: Support more platforms
-    if (os.platform() !== "linux" || os.arch() !== "x64") {
-      // https://nodejs.org/api/os.html
-      core.setFailed("Only Linux x86-64 is supported with installer: true");
-      return;
-    }
-
-    // Refactor
-    const cachedPath = tc.find("sam", version);
-    if (cachedPath) {
-      core.addPath(path.join(cachedPath, "dist"));
-    }
-
-    const url = `https://github.com/aws/aws-sam-cli/releases/download/v${version}/aws-sam-cli-linux-x86_64.zip`;
-    const toolPath = await tc.downloadTool(url);
-    const tempDir = mkdirTemp();
-    const extractedDir = await tc.extractZip(toolPath, tempDir);
-    const cachedDir = await tc.cacheDir(extractedDir, "sam", version);
-    const binDir = path.join(cachedDir, "dist");
-    core.addPath(binDir);
-    return;
-  }
-
-  const binPath = await installSamCli(python, version);
+  const binPath = useInstaller
+    ? await installUsingOfficialInstaller(version)
+    : await installSamCli(python, version);
   core.addPath(binPath);
 }
 

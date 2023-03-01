@@ -33,13 +33,7 @@ jobs:
           python-version: "3.8"
 
       - name: Test with self-contained installer
-        uses: ./
-        with:
-          installer: true
-          version: "1.75.0"
-      - run: sam --version | grep -F 1.75.0
-
-      - name: Test with self-contained installer (same version; should be cached)
+        if: startsWith(matrix.os, 'ubuntu')
         uses: ./
         with:
           installer: true
