@@ -7,8 +7,6 @@ Action to set up [AWS SAM CLI](https://docs.aws.amazon.com/serverless-applicatio
 
 This action enables you to run AWS SAM CLI commands in order to build, package, and deploy [serverless applications](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) as part of your workflow.
 
-Requires Python 3.7+.
-
 ## Example
 
 Assuming you have a [`samconfig.toml`](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html) at the root of your repository:
@@ -23,10 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.8"
       - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
       - uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -46,12 +43,6 @@ See [AWS IAM best practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/be
 
 The AWS SAM CLI version to install. Installs the latest version by default.
 
-### `python`
-
-The Python interpreter to use for AWS SAM CLI. Defaults to `python` on Windows, and `python3` otherwise.
-
-You can use [`actions/setup-python`](https://github.com/actions/setup-python) to automatically set up Python.
-
 ### `use-installer`
 
 > **Note**
@@ -59,6 +50,12 @@ You can use [`actions/setup-python`](https://github.com/actions/setup-python) to
 > Only supported on Linux x86-64 runners currently.
 
 Set to `true` to install using native installers instead of `pip`. Defaults to `false`.
+
+### `python`
+
+The Python interpreter to use for AWS SAM CLI when `use-installer` is set to `false`. Defaults to `python` on Windows, and `python3` otherwise.
+
+You can use [`actions/setup-python`](https://github.com/actions/setup-python) to automatically set up Python.
 
 ## Security
 
