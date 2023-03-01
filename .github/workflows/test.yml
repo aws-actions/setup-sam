@@ -37,9 +37,9 @@ jobs:
         uses: ./
         with:
           installer: true
-          version: "1.75.0"
+          version: "1.71.0"
       - if: startsWith(matrix.os, 'ubuntu')
-        run: sam --version | grep -F 1.75.0
+        run: sam --version | grep -F 1.71.0
 
       - name: Test official installer (latest version)
         if: startsWith(matrix.os, 'ubuntu')
