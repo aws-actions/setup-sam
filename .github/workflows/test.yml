@@ -35,7 +35,7 @@ jobs:
       # Test installer
       - uses: ./
         with:
-          experimental: true
+          installer: true
           version: "1.75.0"
       - run: sam --version | grep -F 1.75.0
 
