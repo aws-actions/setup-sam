@@ -94,6 +94,9 @@ async function installSamCli(python, version) {
   ]);
 
   // Install latest compatible version
+  if (!version) {
+    version = "1.*";
+  }
   await exec.exec(pythonPath, [
     "-m",
     "pip",
@@ -161,7 +164,7 @@ async function installUsingOfficialInstaller(version) {
 }
 
 async function setup() {
-  const version = getInput("version", /^[\d.*]+$/, "1.*");
+  const version = getInput("version", /^[\d.*]*$/, "");
   // python3 isn't standard on Windows
   const defaultPython = isWindows() ? "python" : "python3";
   const python = getInput("python", /^.+$/, defaultPython);
