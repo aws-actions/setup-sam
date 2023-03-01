@@ -39,6 +39,13 @@ jobs:
           version: "1.75.0"
       - run: sam --version | grep -F 1.75.0
 
+      - name: Test with self-contained installer (same version; should be cached)
+        uses: ./
+        with:
+          installer: true
+          version: "1.75.0"
+      - run: sam --version | grep -F 1.75.0
+
       # Test latest published version
       - uses: aws-actions/setup-sam@v2
         with:
