@@ -132,7 +132,7 @@ function getInput(name, pattern, defaultValue) {
 }
 
 /**
- * Installs SAM CLI using the official installer.
+ * Installs SAM CLI using the native installers.
  *
  * See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
  *
@@ -141,7 +141,7 @@ function getInput(name, pattern, defaultValue) {
  */
 // TODO: Support more platforms
 // TODO: Support caching
-async function installUsingOfficialInstaller(version) {
+async function installUsingNativeInstaller(version) {
   if (os.platform() !== "linux" || os.arch() !== "x64") {
     core.setFailed("Only Linux x86-64 is supported with installer: true");
     return "";
@@ -166,7 +166,7 @@ async function setup() {
   const useInstaller = core.getBooleanInput("installer");
 
   const binPath = useInstaller
-    ? await installUsingOfficialInstaller(version)
+    ? await installUsingNativeInstaller(version)
     : await installSamCli(python, version);
   core.addPath(binPath);
 }

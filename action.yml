@@ -11,7 +11,7 @@ inputs:
     description: "The Python interpreter to use for AWS SAM CLI"
     required: false
   installer:
-    description: "Whether to use self-contained AWS SAM CLI installer"
+    description: "Set to true to install using native installers instead of pip"
     required: false
     default: false
 runs:
