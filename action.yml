@@ -10,6 +10,10 @@ inputs:
   python:
     description: "The Python interpreter to use for AWS SAM CLI"
     required: false
+  installer:
+    description: "Whether to use self-contained AWS SAM CLI installer"
+    required: false
+    default: false
 runs:
   using: "node16"
   main: "dist/index.js"
