@@ -55,6 +55,7 @@ You can use [`actions/setup-python`](https://github.com/actions/setup-python) to
 ### `installer`
 
 > **Note**
+>
 > Only supported on Linux x86-64 runners currently.
 
 Set to `true` to install using native installers instead of `pip`. Defaults to `false`.
