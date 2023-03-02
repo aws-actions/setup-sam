@@ -147,7 +147,7 @@ test("when use-installer enabled and version not specified, downloads latest ver
   expect(core.addPath).toHaveBeenCalledWith("/path/to/extracted/sam/dist");
 });
 
-test("when use-installer enabled but version is either '1.2', '1.2.a', or 'foo', downloadTool is not called", async () => {
+test("when use-installer enabled but version is not in format x.y.z, not downloaded or checked in cache", async () => {
   jest.spyOn(os, "platform").mockReturnValue("linux");
   jest.spyOn(os, "arch").mockReturnValue("x64");
 
@@ -157,5 +157,6 @@ test("when use-installer enabled but version is either '1.2', '1.2.a', or 'foo',
     core.getInput = jest.fn().mockReturnValueOnce(version);
     await setup();
     expect(tc.downloadTool).toHaveBeenCalledTimes(0);
+    expect(tc.find).toHaveBeenCalledTimes(0);
   }
 });
