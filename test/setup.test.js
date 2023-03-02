@@ -137,13 +137,12 @@ test("when use-installer enabled and version not specified, downloads latest ver
 
   await setup();
 
-  // Currently no caching on latest
-  expect(tc.find).toHaveBeenCalledTimes(0);
-  expect(tc.cacheDir).toHaveBeenCalledTimes(0);
-
   expect(tc.downloadTool).toHaveBeenCalledWith(
     "https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip"
   );
 
+  // Currently no caching on latest
+  expect(tc.find).toHaveBeenCalledTimes(0);
+  expect(tc.cacheDir).toHaveBeenCalledTimes(0);
   expect(core.addPath).toHaveBeenCalledWith("/path/to/extracted/sam/dist");
 });
