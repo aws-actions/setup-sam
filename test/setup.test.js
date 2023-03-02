@@ -1,12 +1,14 @@
 jest.mock("@actions/core");
 jest.mock("@actions/exec");
 jest.mock("@actions/io");
+jest.mock("@actions/tool-cache");
 
 const os = require("os");
 
 const core = require("@actions/core");
 const exec = require("@actions/exec");
 const io = require("@actions/io");
+const tc = require("@actions/tool-cache");
 
 const setup = require("../lib/setup");
 
@@ -81,4 +83,36 @@ test.each([
     .mockReturnValueOnce(input.version)
     .mockReturnValueOnce(input.python);
   await expect(setup).rejects.toThrow(Error);
+});
+
+test("when use-installer enabled and version specified and cached version exists, uses cached version", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+
+  core.getBooleanInput = jest.fn().mockReturnValue(true);
+  core.getInput = jest.fn().mockReturnValueOnce("1.2.3");
+
+  tc.find = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
+
+  await setup();
+
+  expect(tc.find).toHaveBeenCalledTimes(1);
+  expect(tc.cacheDir).toHaveBeenCalledTimes(0);
+});
+
+test("when use-installer enabled and version specified and cached version does not exist, downloads and caches version", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+
+  core.getBooleanInput = jest.fn().mockReturnValue(true);
+  core.getInput = jest.fn().mockReturnValueOnce("1.2.3");
+
+  tc.find = jest.fn().mockReturnValueOnce("");
+  tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
+  tc.cacheDir = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
+
+  await setup();
+
+  expect(tc.find).toHaveBeenCalledTimes(1);
+  expect(tc.cacheDir).toHaveBeenCalledTimes(1);
 });
