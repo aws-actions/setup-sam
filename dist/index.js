@@ -146,6 +146,7 @@ async function installUsingNativeInstaller(version) {
     return "";
   }
 
+  // TODO: If not set, check latest version and return from cache if exists
   if (version) {
     const cachedDir = tc.find("sam", version);
     if (cachedDir) {
@@ -162,6 +163,7 @@ async function installUsingNativeInstaller(version) {
   const extractedDir = await tc.extractZip(toolPath);
   const binDir = path.join(extractedDir, "dist");
 
+  // TODO: If not set, cache with latest version
   if (version) {
     const cachedDir = await tc.cacheDir(extractedDir, "sam", version);
     core.info(`Cached AWS SAM CLI ${version} to ${cachedDir}`);
