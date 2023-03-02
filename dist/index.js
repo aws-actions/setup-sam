@@ -132,6 +132,13 @@ function getInput(name, pattern, defaultValue) {
 }
 
 /**
+ * Returns whether a string is in the format x.y.z.
+ */
+function isSemver(s) {
+  return /^\d.\d.\d$/.test(s);
+}
+
+/**
  * Installs SAM CLI using the native installers.
  *
  * See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
@@ -143,6 +150,12 @@ function getInput(name, pattern, defaultValue) {
 async function installUsingNativeInstaller(version) {
   if (os.platform() !== "linux" || os.arch() !== "x64") {
     core.setFailed("Only Linux x86-64 is supported with use-installer: true");
+    return "";
+  }
+
+  // Must be full semantic version; downloads version directly from GitHub
+  if (version && !isSemver(version)) {
+    core.setFailed("Version must be in the format x.y.z");
     return "";
   }
 
