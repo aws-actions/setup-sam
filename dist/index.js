@@ -167,6 +167,7 @@ async function installUsingNativeInstaller(version) {
   if (version) {
     const cachedDir = await tc.cacheDir(extractedDir, "sam", version);
     core.info(`Cached AWS SAM CLI ${version} to ${cachedDir}`);
+    return path.join(cachedDir, "dist");
   }
 
   return binDir;

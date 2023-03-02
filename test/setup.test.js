@@ -98,6 +98,9 @@ test("when use-installer enabled and version specified and cached version exists
 
   expect(tc.find).toHaveBeenCalledTimes(1);
   expect(tc.cacheDir).toHaveBeenCalledTimes(0);
+
+  // Must be cached path
+  expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
 });
 
 test("when use-installer enabled and version specified and cached version does not exist, downloads and caches version", async () => {
@@ -108,11 +111,39 @@ test("when use-installer enabled and version specified and cached version does n
   core.getInput = jest.fn().mockReturnValueOnce("1.2.3");
 
   tc.find = jest.fn().mockReturnValueOnce("");
-  tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
+  tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/extracted/sam");
   tc.cacheDir = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
 
   await setup();
 
   expect(tc.find).toHaveBeenCalledTimes(1);
   expect(tc.cacheDir).toHaveBeenCalledTimes(1);
+
+  // Must return cached path
+  expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
+});
+
+test("when use-installer enabled and version not specified, downloads latest version (Linux x64)", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+
+  core.getBooleanInput = jest.fn().mockReturnValue(true);
+  core.getInput = jest.fn().mockReturnValueOnce("");
+
+  tc.find = jest.fn().mockReturnValueOnce("");
+  tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/extracted/sam");
+  tc.cacheDir = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
+  tc.downloadTool = jest.fn().mockReturnValueOnce("/path/to/downloaded/sam");
+
+  await setup();
+
+  // Currently no caching on latest
+  expect(tc.find).toHaveBeenCalledTimes(0);
+  expect(tc.cacheDir).toHaveBeenCalledTimes(0);
+
+  expect(tc.downloadTool).toHaveBeenCalledWith(
+    "https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip"
+  );
+
+  expect(core.addPath).toHaveBeenCalledWith("/path/to/extracted/sam/dist");
 });
