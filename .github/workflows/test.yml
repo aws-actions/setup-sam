@@ -33,6 +33,13 @@ jobs:
           version: "1.71.0"
       - run: sam --version | grep -F 1.71.0
 
+      - name: Test official installer (pinned version; should use cache)
+        uses: ./
+        with:
+          use-installer: true
+          version: "1.71.0"
+      - run: sam --version | grep -F 1.71.0
+
       - name: Test official installer (latest version)
         uses: ./
         with:
