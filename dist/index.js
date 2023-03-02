@@ -147,10 +147,12 @@ async function installUsingNativeInstaller(version) {
     return "";
   }
 
-  const cachedPath = tc.find("sam", version);
-  if (cachedPath) {
-    core.info(`Using cached AWS SAM CLI from ${cachedPath}`);
-    return path.join(cachedPath, "dist");
+  if (version) {
+    const cachedPath = tc.find("sam", version);
+    if (cachedPath) {
+      core.info(`Using cached AWS SAM CLI from ${cachedPath}`);
+      return path.join(cachedPath, "dist");
+    }
   }
 
   const url = version
