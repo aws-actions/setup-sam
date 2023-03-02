@@ -147,13 +147,20 @@ async function installUsingNativeInstaller(version) {
     return "";
   }
 
+  const cachedPath = tc.find("sam", version);
+  if (cachedPath) {
+    core.info(`Using cached AWS SAM CLI from ${cachedPath}`);
+    return path.join(cachedPath, "dist");
+  }
+
   const url = version
     ? `https://github.com/aws/aws-sam-cli/releases/download/v${version}/aws-sam-cli-linux-x86_64.zip`
     : "https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip";
 
   const toolPath = await tc.downloadTool(url);
   const extractedDir = await tc.extractZip(toolPath);
-  const binDir = path.join(extractedDir, "dist");
+  const cachedDir = await tc.cacheDir(extractedDir, "sam", version);
+  const binDir = path.join(cachedDir, "dist");
 
   return binDir;
 }
