@@ -149,7 +149,7 @@ async function installUsingNativeInstaller(version) {
   if (version) {
     const cachedDir = tc.find("sam", version);
     if (cachedDir) {
-      core.info(`Using cached AWS SAM CLI from ${cachedDir}`);
+      core.info(`Using cached AWS SAM CLI ${version} from ${cachedDir}`);
       return path.join(cachedDir, "dist");
     }
   }
@@ -160,8 +160,12 @@ async function installUsingNativeInstaller(version) {
 
   const toolPath = await tc.downloadTool(url);
   const extractedDir = await tc.extractZip(toolPath);
-  const cachedDir = await tc.cacheDir(extractedDir, "sam", version);
-  const binDir = path.join(cachedDir, "dist");
+  const binDir = path.join(extractedDir, "dist");
+
+  if (version) {
+    const cachedDir = await tc.cacheDir(extractedDir, "sam", version);
+    core.info(`Cached AWS SAM CLI ${version} to ${cachedDir}`);
+  }
 
   return binDir;
 }
