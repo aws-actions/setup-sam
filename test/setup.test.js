@@ -90,7 +90,7 @@ test("when use-installer enabled and version specified and cached version exists
   jest.spyOn(os, "arch").mockReturnValue("x64");
 
   core.getBooleanInput = jest.fn().mockReturnValue(true);
-  core.getInput = jest.fn().mockReturnValueOnce("1.2.3");
+  core.getInput = jest.fn().mockReturnValueOnce("1.23.456");
 
   tc.find = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
 
@@ -108,7 +108,7 @@ test("when use-installer enabled and version specified and cached version does n
   jest.spyOn(os, "arch").mockReturnValue("x64");
 
   core.getBooleanInput = jest.fn().mockReturnValue(true);
-  core.getInput = jest.fn().mockReturnValueOnce("1.2.3");
+  core.getInput = jest.fn().mockReturnValueOnce("1.23.456");
 
   tc.find = jest.fn().mockReturnValueOnce("");
   tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/extracted/sam");

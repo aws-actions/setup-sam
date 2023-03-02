@@ -135,7 +135,7 @@ function getInput(name, pattern, defaultValue) {
  * Returns whether a string is in the format x.y.z.
  */
 function isSemver(s) {
-  return /^\d.\d.\d$/.test(s);
+  return /^\d+\.\d+\.\d+$/.test(s);
 }
 
 /**
