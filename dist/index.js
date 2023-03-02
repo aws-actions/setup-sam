@@ -140,7 +140,6 @@ function getInput(name, pattern, defaultValue) {
  * @returns {Promise<string>} The directory SAM CLI is installed in.
  */
 // TODO: Support more platforms
-// TODO: Support caching
 async function installUsingNativeInstaller(version) {
   if (os.platform() !== "linux" || os.arch() !== "x64") {
     core.setFailed("Only Linux x86-64 is supported with use-installer: true");
