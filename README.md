@@ -47,13 +47,19 @@ The AWS SAM CLI version to install. Installs the latest version by default.
 
 > **Note**
 >
-> Only supported on Linux x86-64 runners currently.
+> This is the recommended approach on supported platforms. It does not require Python to be installed, and is faster than the default installation method that uses `pip`.
+>
+> Currently supports Linux x86-64 runners.
 
-Set to `true` to install using native installers instead of `pip`. Defaults to `false`.
+Set to `true` to set up AWS SAM CLI using a native installer.  Defaults to `false`.
 
 ### `python`
 
-The Python interpreter to use for AWS SAM CLI when `use-installer` is set to `false`. Defaults to `python` on Windows, and `python3` otherwise.
+> **Note**
+>
+> Unused if `use-installer` is set to `false`.
+
+The Python interpreter to use for AWS SAM CLI. Defaults to `python` on Windows, and `python3` otherwise.
 
 You can use [`actions/setup-python`](https://github.com/actions/setup-python) to automatically set up Python.
 
