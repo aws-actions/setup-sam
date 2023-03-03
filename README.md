@@ -57,7 +57,7 @@ Set to `true` to set up AWS SAM CLI using a native installer. Defaults to `false
 
 > **Note**
 >
-> Unused if `use-installer` is set to `false`.
+> Unused if `use-installer` is set to `true`.
 
 The Python interpreter to use for AWS SAM CLI. Defaults to `python` on Windows, and `python3` otherwise.
 
