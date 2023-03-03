@@ -47,7 +47,7 @@ The AWS SAM CLI version to install. Installs the latest version by default.
 
 > **Note**
 >
-> This is the recommended approach on supported platforms. It does not require Python to be installed, and is faster than the default installation method that uses `pip`.
+> This is the recommended approach on supported platforms. It does not require Python to be installed, and is faster than the default installation method.
 >
 > Currently supports Linux x86-64 runners.
 
