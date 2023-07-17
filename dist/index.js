@@ -102,7 +102,7 @@ async function installSamCli(python, version) {
     "-m",
     "pip",
     "install",
-    '"cython<3.0.0"',
+    "cython<3.0.0",
     "pyyaml==5.4.1",
     "--no-build-isolation",
   ]);
