@@ -62,7 +62,7 @@ jobs:
         python:
           - "3.8"
           - "3.11"
-    name: ${{ matrix.os }}
+    name: ${{ matrix.os }} / ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
