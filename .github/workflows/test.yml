@@ -59,13 +59,16 @@ jobs:
           - macos-latest
           - ubuntu-22.04
           - windows-2019
-    name: ${{ matrix.os }}
+        python:
+          - "3.8"
+          - "3.11"
+    name: PyPI / ${{ matrix.os }} / ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.8"
+          python-version: ${{ matrix.python }}
 
       - name: Test official installer (pinned version)
         if: startsWith(matrix.os, 'ubuntu')
@@ -86,12 +89,6 @@ jobs:
           version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
           sam --version | grep -F "$version"
         shell: bash
-
-      # Test latest published version
-      - uses: aws-actions/setup-sam@v2
-        with:
-          version: "1.46.0"
-      - run: sam --version | grep -F 1.46.0
 
       # Test setup specific version
       - uses: ./
