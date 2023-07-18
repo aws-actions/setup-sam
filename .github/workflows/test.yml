@@ -59,13 +59,16 @@ jobs:
           - macos-latest
           - ubuntu-22.04
           - windows-2019
+        python:
+          - "3.8"
+          - "3.11"
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.8"
+          python-version: ${{ matrix.python }}
 
       - name: Test official installer (pinned version)
         if: startsWith(matrix.os, 'ubuntu')
