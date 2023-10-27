@@ -9,6 +9,7 @@ const core = require("@actions/core");
 const exec = require("@actions/exec");
 const io = require("@actions/io");
 const tc = require("@actions/tool-cache");
+const httpm = require("@actions/http-client");
 
 const setup = require("../lib/setup");
 
@@ -123,9 +124,39 @@ test("when use-installer enabled and version specified and cached version does n
   expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
 });
 
-test("when use-installer enabled and version not specified, downloads latest version (Linux x64)", async () => {
+test("when use-installer enabled and version not specified, cache latest version (Linux x64)", async () => {
   jest.spyOn(os, "platform").mockReturnValue("linux");
   jest.spyOn(os, "arch").mockReturnValue("x64");
+
+  core.getBooleanInput = jest.fn().mockReturnValue(true);
+  core.getInput = jest.fn().mockReturnValueOnce("");
+
+  tc.find = jest.fn().mockReturnValueOnce("");
+  tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/extracted/sam");
+  tc.cacheDir = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
+  tc.downloadTool = jest.fn().mockReturnValueOnce("/path/to/downloaded/sam");
+
+  await setup();
+
+  // Because latest SAM CLI release version change, we have to use REGEX here
+  expect(tc.downloadTool).toHaveBeenCalledWith(
+    expect.stringMatching(
+      /https:\/\/github\.com\/aws\/aws-sam-cli\/releases\/download\/v\d+\.\d+\.\d+\/aws-sam-cli-linux-x86_64\.zip/
+    )
+  );
+
+  // Currently no caching on latest
+  expect(tc.find).toHaveBeenCalledTimes(1);
+  expect(tc.cacheDir).toHaveBeenCalledTimes(1);
+  expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
+});
+
+test("when use-installer enabled and version not specified, downloads latest version when getLatestReleaseTag failed (Linux x64)", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  jest
+    .spyOn(httpm.HttpClient.prototype, "get")
+    .mockRejectedValueOnce(new Error("Mocked exception"));
 
   core.getBooleanInput = jest.fn().mockReturnValue(true);
   core.getInput = jest.fn().mockReturnValueOnce("");
