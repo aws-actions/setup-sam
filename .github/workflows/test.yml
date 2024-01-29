@@ -9,8 +9,8 @@ jobs:
     name: npm test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
       - run: npm ci
       - run: npm test
 
@@ -24,7 +24,7 @@ jobs:
     name: Native installer / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Test official installer (pinned version)
         uses: ./
@@ -65,8 +65,8 @@ jobs:
     name: PyPI / ${{ matrix.os }} / ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
 
@@ -107,7 +107,7 @@ jobs:
       - run: sam init --name sam-app --runtime nodejs14.x --dependency-manager npm --app-template hello-world
 
       # Test sam build
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: "14"
       - run: sam build
