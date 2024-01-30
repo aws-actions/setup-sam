@@ -104,12 +104,12 @@ jobs:
         shell: bash
 
       # Test sam init
-      - run: sam init --name sam-app --runtime nodejs14.x --dependency-manager npm --app-template hello-world
+      - run: sam init --name sam-app --runtime nodejs20.x --dependency-manager npm --app-template hello-world
 
       # Test sam build
       - uses: actions/setup-node@v4
         with:
-          node-version: "14"
+          node-version: "20"
       - run: sam build
         working-directory: ./sam-app
 
