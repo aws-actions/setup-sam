@@ -14,6 +14,9 @@ inputs:
     description: "Set to true to install using native installers instead of pip"
     required: false
     default: false
+  token:
+    description: "Authentication token to be used to call GITHUB Apis"
+    required: false
 runs:
   using: "node20"
   main: "dist/index.js"

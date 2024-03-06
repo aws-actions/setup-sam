@@ -24,6 +24,7 @@ jobs:
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -62,6 +63,16 @@ Set to `true` to set up AWS SAM CLI using a native installer. Defaults to `false
 The Python interpreter to use for AWS SAM CLI. Defaults to `python` on Windows, and `python3` otherwise.
 
 You can use [`actions/setup-python`](https://github.com/actions/setup-python) to automatically set up Python.
+
+### `token`
+
+> **Note**
+>
+> It is recommended to use token to have higher rate limit. Default [unauthenticated users](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api?apiVersion=2022-11-28#primary-rate-limit-for-unauthenticated-users) without a token will have a lesser rate limit enforced.
+
+The GITHUB Authentication token to use for calling the GITHUB [Get the latest release](https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28#get-the-latest-release) API. Defaults to call the API as unauthenticated request if not specified.
+
+The parameter can accept either [`GITHUB_TOKEN`](https://docs.github.com/en/actions/security-guides/automatic-token-authentication) or [`PAT(Personal Access Token)`](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) tokens.
 
 ## Security
 
