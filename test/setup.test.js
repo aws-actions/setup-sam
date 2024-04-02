@@ -151,6 +151,72 @@ test("when use-installer enabled and version not specified, cache latest version
   expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
 });
 
+test.each([
+  {
+    releaseTagVersion: "v1.110.0",
+    input: { userInstaller: true },
+    expected: {
+      latestVersion: "v1.110.0",
+      headers: undefined,
+    },
+  },
+  {
+    releaseTagVersion: "v1.110.0",
+    input: { userInstaller: true, token: "" },
+    expected: {
+      latestVersion: "v1.110.0",
+      headers: undefined,
+    },
+  },
+  {
+    releaseTagVersion: "v1.110.0",
+    input: { userInstaller: true, token: "1234abc" },
+    expected: {
+      latestVersion: "v1.110.0",
+      headers: {
+        Authorization: "Bearer 1234abc",
+      },
+    },
+  },
+])("github api request %o", async (test) => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  // Mocked API call to return only the required field
+  jest.spyOn(httpm.HttpClient.prototype, "get").mockReturnValue({
+    message: { statusCode: 200 },
+    readBody: () => {
+      return `{ "tag_name": "${test.releaseTagVersion}" }`;
+    },
+  });
+
+  core.getBooleanInput = jest.fn().mockReturnValue(test.input.userInstaller);
+  core.getInput = jest
+    .fn()
+    .mockReturnValueOnce("")
+    .mockReturnValueOnce("python3")
+    .mockReturnValueOnce(test.input.token);
+
+  tc.find = jest.fn().mockReturnValueOnce("");
+  tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/extracted/sam");
+  tc.cacheDir = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
+  tc.downloadTool = jest.fn().mockReturnValueOnce("/path/to/downloaded/sam");
+
+  await setup();
+
+  expect(httpm.HttpClient.prototype.get).toHaveBeenCalledWith(
+    expect.anything(),
+    test.expected.headers
+  );
+
+  expect(tc.downloadTool).toHaveBeenCalledWith(
+    `https://github.com/aws/aws-sam-cli/releases/download/${test.expected.latestVersion}/aws-sam-cli-linux-x86_64.zip`
+  );
+
+  expect(tc.find).toHaveBeenCalledTimes(1);
+  expect(tc.cacheDir).toHaveBeenCalledTimes(1);
+  expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
+});
+
 test("when use-installer enabled and version not specified, downloads latest version when getLatestReleaseTag failed (Linux x64)", async () => {
   jest.spyOn(os, "platform").mockReturnValue("linux");
   jest.spyOn(os, "arch").mockReturnValue("x64");
