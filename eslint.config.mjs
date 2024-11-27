@@ -7,24 +7,28 @@ import { FlatCompat } from "@eslint/eslintrc";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const compat = new FlatCompat({
-    baseDirectory: __dirname,
-    recommendedConfig: js.configs.recommended,
-    allConfig: js.configs.all
+  baseDirectory: __dirname,
+  recommendedConfig: js.configs.recommended,
+  allConfig: js.configs.all,
 });
 
-export default [{
+export default [
+  {
     ignores: ["**/dist/"],
-}, ...compat.extends("eslint:recommended"), {
+  },
+  ...compat.extends("eslint:recommended"),
+  {
     languageOptions: {
-        globals: {
-            ...globals.commonjs,
-            ...globals.jest,
-            ...globals.node,
-        },
+      globals: {
+        ...globals.commonjs,
+        ...globals.jest,
+        ...globals.node,
+      },
 
-        ecmaVersion: 2021,
-        sourceType: "module",
+      ecmaVersion: 2021,
+      sourceType: "module",
     },
 
     rules: {},
-}];
+  },
+];
