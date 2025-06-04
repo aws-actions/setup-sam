@@ -21,6 +21,7 @@ jobs:
         os:
           - ubuntu-latest
           - ubuntu-22.04
+          - ubuntu-22.04-arm
     name: Native installer / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -30,15 +31,15 @@ jobs:
         uses: ./
         with:
           use-installer: true
-          version: "1.71.0"
-      - run: sam --version | grep -F 1.71.0
+          version: "1.104.0"
+      - run: sam --version | grep -F 1.104.0
 
       - name: Test official installer (pinned version; should use cache)
         uses: ./
         with:
           use-installer: true
-          version: "1.71.0"
-      - run: sam --version | grep -F 1.71.0
+          version: "1.104.0"
+      - run: sam --version | grep -F 1.104.0
 
       - name: Test official installer (latest version)
         uses: ./
@@ -60,7 +61,8 @@ jobs:
           - ubuntu-22.04
           - windows-2019
         python:
-          - "3.8"
+          - "3.9"
+          - "3.10"
           - "3.11"
     name: PyPI / ${{ matrix.os }} / ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
@@ -95,6 +97,78 @@ jobs:
         with:
           version: "1.18.2"
       - run: sam --version | grep -F 1.18.2
+
+      # Test setup latest version
+      - uses: ./
+      - run: |
+          version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
+          sam --version | grep -F "$version"
+        shell: bash
+
+      # Test sam init
+      - run: sam init --name sam-app --runtime nodejs20.x --dependency-manager npm --app-template hello-world
+
+      # Test sam build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: sam build
+        working-directory: ./sam-app
+
+      # Test sam build --use-container
+      # Doesn't work as-is on macOS or Windows due to licensing:
+      # - https://github.com/actions/virtual-environments/issues/17
+      # - https://github.com/actions/virtual-environments/issues/1143
+      - if: startsWith(matrix.os, 'ubuntu')
+        run: sam build --use-container
+        working-directory: ./sam-app
+
+  integ-new-python:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+          - ubuntu-22.04
+          - windows-2019
+        python:
+          - "3.12"
+          - "3.13"
+    name: PyPI / ${{ matrix.os }} / ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Test official installer (pinned version)
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: ./
+        with:
+          use-installer: true
+          version: "1.130.0"
+      - if: startsWith(matrix.os, 'ubuntu')
+        run: sam --version | grep -F 1.130.0
+
+      - name: Test official installer (latest version)
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: ./
+        with:
+          use-installer: true
+      - if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
+          sam --version | grep -F "$version"
+        shell: bash
+
+      # Test setup specific version
+      - uses: ./
+        with:
+          version: "1.128.0"
+      - run: sam --version | grep -F 1.128.0
 
       # Test setup latest version
       - uses: ./
