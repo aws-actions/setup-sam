@@ -50,9 +50,8 @@ The AWS SAM CLI version to install. Installs the latest version by default.
 >
 > This is the recommended approach on supported platforms. It does not require Python to be installed, and is faster than the default installation method.
 >
-> Currently supports Linux x86-64 runners.
-
-Set to `true` to set up AWS SAM CLI using a native installer. Defaults to `false`.
+> Currently supports Linux x86-64 and aarch64 (ARM) runners. For ARM architecture, only versions 1.104.0 and above are supported.
+> Set to `true` to set up AWS SAM CLI using a native installer. Defaults to `false`.
 
 ### `python`
 
