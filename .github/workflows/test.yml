@@ -71,7 +71,7 @@ jobs:
     env:
       # Set SAM versions based on Python version
       SAM_VERSION: ${{ contains(fromJson('["3.12", "3.13"]'), matrix.python) && '1.128.0' || '1.18.2' }}
-      INSTALLER_VERSION: ${{ contains(fromJson('["3.12", "3.13"]'), matrix.python) && '1.130.0' || '1.71.0' }}
+      INSTALLER_VERSION: ${{ contains( matrix.os, '-arm') && '1.130.0' || '1.71.0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
