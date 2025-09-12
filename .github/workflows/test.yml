@@ -115,7 +115,7 @@ jobs:
       - run: sam init --name sam-app --runtime nodejs20.x --dependency-manager npm --app-template hello-world
 
       # Test sam build
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
       - run: sam build
