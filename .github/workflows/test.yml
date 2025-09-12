@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
       - run: npm ci
       - run: npm test
 
@@ -123,8 +123,9 @@ jobs:
 
       # Test sam build --use-container
       # Doesn't work as-is on macOS or Windows due to licensing:
-      # - https://github.com/actions/virtual-environments/issues/17
-      # - https://github.com/actions/virtual-environments/issues/1143
-      - if: startsWith(matrix.os, 'ubuntu')
+      # - https://github.com/actions/runner-images/issues/17
+      # - https://github.com/actions/runner-images/issues/1143
+      # Ubuntu ARM runners are not yet GA
+      - if: startsWith(matrix.os, 'ubuntu') && !contains(matrix.os, '-arm')
         run: sam build --use-container
         working-directory: ./sam-app
