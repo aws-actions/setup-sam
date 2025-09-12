@@ -171,6 +171,7 @@ async function getLatestReleaseTag(token) {
  * @param {string} token - Authentication Token to use for GITHUB Apis.
  * @returns {Promise<string>} The directory SAM CLI is installed in.
  */
+// TODO: Support more platforms
 async function installUsingNativeInstaller(inputVersion, token) {
   if (os.platform() !== "linux") {
     core.setFailed("Only Linux is supported with use-installer: true");
