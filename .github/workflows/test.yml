@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
       - run: npm ci
       - run: npm test
 
@@ -21,6 +21,7 @@ jobs:
         os:
           - ubuntu-latest
           - ubuntu-22.04
+          - ubuntu-24.04-arm
     name: Native installer / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -30,15 +31,15 @@ jobs:
         uses: ./
         with:
           use-installer: true
-          version: "1.71.0"
-      - run: sam --version | grep -F 1.71.0
+          version: "1.104.0"
+      - run: sam --version | grep -F 1.104.0
 
       - name: Test official installer (pinned version; should use cache)
         uses: ./
         with:
           use-installer: true
-          version: "1.71.0"
-      - run: sam --version | grep -F 1.71.0
+          version: "1.104.0"
+      - run: sam --version | grep -F 1.104.0
 
       - name: Test official installer (latest version)
         uses: ./
@@ -58,12 +59,19 @@ jobs:
           - windows-latest
           - macos-latest
           - ubuntu-22.04
-          - windows-2019
+          - ubuntu-24.04-arm
         python:
-          - "3.8"
+          - "3.9"
+          - "3.10"
           - "3.11"
+          - "3.12"
+          - "3.13"
     name: PyPI / ${{ matrix.os }} / ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    env:
+      # Set SAM versions based on Python version
+      SAM_VERSION: ${{ contains(fromJson('["3.12", "3.13"]'), matrix.python) && '1.128.0' || '1.18.2' }}
+      INSTALLER_VERSION: ${{ contains( matrix.os, '-arm') && '1.130.0' || '1.71.0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -75,9 +83,9 @@ jobs:
         uses: ./
         with:
           use-installer: true
-          version: "1.71.0"
+          version: ${{ env.INSTALLER_VERSION }}
       - if: startsWith(matrix.os, 'ubuntu')
-        run: sam --version | grep -F 1.71.0
+        run: sam --version | grep -F ${{ env.INSTALLER_VERSION }}
 
       - name: Test official installer (latest version)
         if: startsWith(matrix.os, 'ubuntu')
@@ -93,8 +101,8 @@ jobs:
       # Test setup specific version
       - uses: ./
         with:
-          version: "1.18.2"
-      - run: sam --version | grep -F 1.18.2
+          version: ${{ env.SAM_VERSION }}
+      - run: sam --version | grep -F ${{ env.SAM_VERSION }}
 
       # Test setup latest version
       - uses: ./
@@ -107,7 +115,7 @@ jobs:
       - run: sam init --name sam-app --runtime nodejs20.x --dependency-manager npm --app-template hello-world
 
       # Test sam build
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
       - run: sam build
@@ -115,8 +123,9 @@ jobs:
 
       # Test sam build --use-container
       # Doesn't work as-is on macOS or Windows due to licensing:
-      # - https://github.com/actions/virtual-environments/issues/17
-      # - https://github.com/actions/virtual-environments/issues/1143
-      - if: startsWith(matrix.os, 'ubuntu')
+      # - https://github.com/actions/runner-images/issues/17
+      # - https://github.com/actions/runner-images/issues/1143
+      # Ubuntu ARM runners are not yet GA
+      - if: startsWith(matrix.os, 'ubuntu') && !contains(matrix.os, '-arm')
         run: sam build --use-container
         working-directory: ./sam-app
