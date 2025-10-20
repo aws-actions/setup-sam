@@ -2,6 +2,7 @@ jest.mock("@actions/core");
 jest.mock("@actions/exec");
 jest.mock("@actions/io");
 jest.mock("@actions/tool-cache");
+jest.mock("@actions/cache");
 
 const os = require("os");
 
@@ -9,6 +10,7 @@ const core = require("@actions/core");
 const exec = require("@actions/exec");
 const io = require("@actions/io");
 const tc = require("@actions/tool-cache");
+const cache = require("@actions/cache");
 const httpm = require("@actions/http-client");
 
 const setup = require("../lib/setup");
@@ -66,7 +68,10 @@ test.each([
   expect(io.which).toHaveBeenCalledWith(test.expected.python, true);
   expect(exec.exec).toHaveBeenCalledWith(
     expect.anything(),
-    expect.arrayContaining(["install", `aws-sam-cli==${test.expected.version}`])
+    expect.arrayContaining([
+      "install",
+      `aws-sam-cli==${test.expected.version}`,
+    ]),
   );
   expect(core.addPath).toHaveBeenCalledTimes(1);
 });
@@ -100,16 +105,20 @@ test.each([
     core.getBooleanInput = jest.fn().mockReturnValue(true);
     core.getInput = jest.fn().mockReturnValueOnce(input);
 
-    tc.find = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
+    cache.restoreCache = jest.fn().mockResolvedValueOnce("cache-key-hit");
 
     await setup();
 
-    expect(tc.find).toHaveBeenCalledTimes(1);
-    expect(tc.cacheDir).toHaveBeenCalledTimes(0);
+    expect(cache.restoreCache).toHaveBeenCalledTimes(1);
+    expect(cache.restoreCache).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.stringContaining(".sam-cli-cache")]),
+      `sam-cli-linux-${expectedArch}-${input}`,
+    );
+    expect(cache.saveCache).toHaveBeenCalledTimes(0);
+    expect(tc.downloadTool).toHaveBeenCalledTimes(0);
 
-    // Must be cached path
-    expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
-  }
+    expect(core.addPath).toHaveBeenCalled();
+  },
 );
 
 test.each([
@@ -126,19 +135,26 @@ test.each([
     core.getBooleanInput = jest.fn().mockReturnValue(true);
     core.getInput = jest.fn().mockReturnValueOnce(input);
 
-    tc.find = jest.fn().mockReturnValueOnce("");
-    tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/extracted/sam");
-    tc.cacheDir = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
-    tc.downloadTool = jest.fn().mockReturnValueOnce("/path/to/downloaded/sam");
+    cache.restoreCache = jest.fn().mockResolvedValueOnce(undefined);
+    cache.saveCache = jest.fn().mockResolvedValueOnce(1);
+    tc.extractZip = jest.fn().mockResolvedValueOnce(undefined);
+    tc.downloadTool = jest
+      .fn()
+      .mockResolvedValueOnce("/path/to/downloaded/sam");
 
     await setup();
 
-    expect(tc.find).toHaveBeenCalledTimes(1);
-    expect(tc.cacheDir).toHaveBeenCalledTimes(1);
+    expect(cache.restoreCache).toHaveBeenCalledTimes(1);
+    expect(tc.downloadTool).toHaveBeenCalledTimes(1);
+    expect(tc.extractZip).toHaveBeenCalledTimes(1);
+    expect(cache.saveCache).toHaveBeenCalledTimes(1);
+    expect(cache.saveCache).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.stringContaining(".sam-cli-cache")]),
+      `sam-cli-linux-${expectedArch}-${input}`,
+    );
 
-    // Must return cached path
-    expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
-  }
+    expect(core.addPath).toHaveBeenCalled();
+  },
 );
 
 test("when use-installer enabled and version is too old for ARM, fails on ARM architecture", async () => {
@@ -151,10 +167,10 @@ test("when use-installer enabled and version is too old for ARM, fails on ARM ar
   await setup();
 
   expect(core.setFailed).toHaveBeenCalledWith(
-    "ARM64 installer is only available for versions 1.104.0 and above"
+    "ARM64 installer is only available for versions 1.104.0 and above",
   );
-  // Ensure download was never called
   expect(tc.downloadTool).not.toHaveBeenCalled();
+  expect(cache.restoreCache).not.toHaveBeenCalled();
 });
 
 test.each([
@@ -169,31 +185,30 @@ test.each([
     core.getBooleanInput = jest.fn().mockReturnValue(true);
     core.getInput = jest.fn().mockReturnValueOnce("");
 
-    // Mock tag response
-    jest.spyOn(httpm.HttpClient.prototype, "get").mockReturnValue({
+    jest.spyOn(httpm.HttpClient.prototype, "get").mockResolvedValue({
       message: { statusCode: 200 },
       readBody: () => {
         return `{ "tag_name": "v1.139.0" }`;
       },
     });
 
-    tc.find = jest.fn().mockReturnValueOnce("");
-    tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/extracted/sam");
-    tc.cacheDir = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
-    tc.downloadTool = jest.fn().mockReturnValueOnce("/path/to/downloaded/sam");
+    cache.restoreCache = jest.fn().mockResolvedValueOnce(undefined);
+    cache.saveCache = jest.fn().mockResolvedValueOnce(1);
+    tc.extractZip = jest.fn().mockResolvedValueOnce(undefined);
+    tc.downloadTool = jest
+      .fn()
+      .mockResolvedValueOnce("/path/to/downloaded/sam");
 
     await setup();
 
-    // Use specific URL with version from mocked API response
     expect(tc.downloadTool).toHaveBeenCalledWith(
-      `https://github.com/aws/aws-sam-cli/releases/download/v1.139.0/aws-sam-cli-linux-${expectedArch}.zip`
+      `https://github.com/aws/aws-sam-cli/releases/download/v1.139.0/aws-sam-cli-linux-${expectedArch}.zip`,
     );
 
-    // Currently no caching on latest
-    expect(tc.find).toHaveBeenCalledTimes(1);
-    expect(tc.cacheDir).toHaveBeenCalledTimes(1);
-    expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
-  }
+    expect(cache.restoreCache).toHaveBeenCalledTimes(1);
+    expect(cache.saveCache).toHaveBeenCalledTimes(1);
+    expect(core.addPath).toHaveBeenCalled();
+  },
 );
 
 test.each([
@@ -233,10 +248,9 @@ test.each([
   jest.spyOn(os, "platform").mockReturnValue("linux");
   jest.spyOn(os, "arch").mockReturnValue(test.arch);
 
-  // Mock API call to return only the required field
   const getMock = jest
     .spyOn(httpm.HttpClient.prototype, "get")
-    .mockReturnValue({
+    .mockResolvedValue({
       message: { statusCode: 200 },
       readBody: () => {
         return `{ "tag_name": "${test.releaseTagVersion}" }`;
@@ -250,25 +264,25 @@ test.each([
     .mockReturnValueOnce("python3")
     .mockReturnValueOnce(test.input.token);
 
-  tc.find = jest.fn().mockReturnValueOnce("");
-  tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/extracted/sam");
-  tc.cacheDir = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
-  tc.downloadTool = jest.fn().mockReturnValueOnce("/path/to/downloaded/sam");
+  cache.restoreCache = jest.fn().mockResolvedValueOnce(undefined);
+  cache.saveCache = jest.fn().mockResolvedValueOnce(1);
+  tc.extractZip = jest.fn().mockResolvedValueOnce(undefined);
+  tc.downloadTool = jest.fn().mockResolvedValueOnce("/path/to/downloaded/sam");
 
   await setup();
 
   expect(getMock).toHaveBeenCalledWith(
     expect.anything(),
-    test.expected.headers
+    test.expected.headers,
   );
 
   expect(tc.downloadTool).toHaveBeenCalledWith(
-    `https://github.com/aws/aws-sam-cli/releases/download/${test.expected.latestVersion}/aws-sam-cli-linux-${test.expected.arch}.zip`
+    `https://github.com/aws/aws-sam-cli/releases/download/${test.expected.latestVersion}/aws-sam-cli-linux-${test.expected.arch}.zip`,
   );
 
-  expect(tc.find).toHaveBeenCalledTimes(1);
-  expect(tc.cacheDir).toHaveBeenCalledTimes(1);
-  expect(core.addPath).toHaveBeenCalledWith("/path/to/cached/sam/dist");
+  expect(cache.restoreCache).toHaveBeenCalledTimes(1);
+  expect(cache.saveCache).toHaveBeenCalledTimes(1);
+  expect(core.addPath).toHaveBeenCalled();
 });
 
 test.each([
@@ -286,22 +300,21 @@ test.each([
     core.getBooleanInput = jest.fn().mockReturnValue(true);
     core.getInput = jest.fn().mockReturnValueOnce("");
 
-    tc.find = jest.fn().mockReturnValueOnce("");
-    tc.extractZip = jest.fn().mockReturnValueOnce("/path/to/extracted/sam");
-    tc.cacheDir = jest.fn().mockReturnValueOnce("/path/to/cached/sam");
-    tc.downloadTool = jest.fn().mockReturnValueOnce("/path/to/downloaded/sam");
+    tc.extractZip = jest.fn().mockResolvedValueOnce(undefined);
+    tc.downloadTool = jest
+      .fn()
+      .mockResolvedValueOnce("/path/to/downloaded/sam");
 
     await setup();
 
     expect(tc.downloadTool).toHaveBeenCalledWith(
-      `https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-${expectedArch}.zip`
+      `https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-${expectedArch}.zip`,
     );
 
-    // Currently no caching on latest
-    expect(tc.find).toHaveBeenCalledTimes(0);
-    expect(tc.cacheDir).toHaveBeenCalledTimes(0);
-    expect(core.addPath).toHaveBeenCalledWith("/path/to/extracted/sam/dist");
-  }
+    expect(cache.restoreCache).toHaveBeenCalledTimes(0);
+    expect(cache.saveCache).toHaveBeenCalledTimes(0);
+    expect(core.addPath).toHaveBeenCalled();
+  },
 );
 
 test.each([["x64"], ["arm64"]])(
@@ -316,7 +329,7 @@ test.each([["x64"], ["arm64"]])(
       core.getInput = jest.fn().mockReturnValueOnce(version);
       await setup();
       expect(tc.downloadTool).toHaveBeenCalledTimes(0);
-      expect(tc.find).toHaveBeenCalledTimes(0);
+      expect(cache.restoreCache).toHaveBeenCalledTimes(0);
     }
-  }
+  },
 );
