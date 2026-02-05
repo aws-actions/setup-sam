@@ -102,6 +102,10 @@ test.each([
     jest.spyOn(os, "platform").mockReturnValue("linux");
     jest.spyOn(os, "arch").mockReturnValue(inputArch);
 
+    // Mock ImageOS environment variable
+    const originalImageOS = process.env.ImageOS;
+    process.env.ImageOS = "ubuntu22";
+
     core.getBooleanInput = jest.fn().mockReturnValue(true);
     core.getInput = jest.fn().mockReturnValueOnce(input);
 
@@ -112,12 +116,19 @@ test.each([
     expect(cache.restoreCache).toHaveBeenCalledTimes(1);
     expect(cache.restoreCache).toHaveBeenCalledWith(
       expect.arrayContaining([expect.stringContaining(".sam-cli-cache")]),
-      `sam-cli-linux-${expectedArch}-${input}`,
+      `sam-cli-linux-ubuntu22-${expectedArch}-${input}`,
     );
     expect(cache.saveCache).toHaveBeenCalledTimes(0);
     expect(tc.downloadTool).toHaveBeenCalledTimes(0);
 
     expect(core.addPath).toHaveBeenCalled();
+
+    // Restore original ImageOS
+    if (originalImageOS === undefined) {
+      delete process.env.ImageOS;
+    } else {
+      process.env.ImageOS = originalImageOS;
+    }
   },
 );
 
@@ -131,6 +142,10 @@ test.each([
   async (inputArch, expectedArch, input) => {
     jest.spyOn(os, "platform").mockReturnValue("linux");
     jest.spyOn(os, "arch").mockReturnValue(inputArch);
+
+    // Mock ImageOS environment variable
+    const originalImageOS = process.env.ImageOS;
+    process.env.ImageOS = "ubuntu22";
 
     core.getBooleanInput = jest.fn().mockReturnValue(true);
     core.getInput = jest.fn().mockReturnValueOnce(input);
@@ -150,10 +165,17 @@ test.each([
     expect(cache.saveCache).toHaveBeenCalledTimes(1);
     expect(cache.saveCache).toHaveBeenCalledWith(
       expect.arrayContaining([expect.stringContaining(".sam-cli-cache")]),
-      `sam-cli-linux-${expectedArch}-${input}`,
+      `sam-cli-linux-ubuntu22-${expectedArch}-${input}`,
     );
 
     expect(core.addPath).toHaveBeenCalled();
+
+    // Restore original ImageOS
+    if (originalImageOS === undefined) {
+      delete process.env.ImageOS;
+    } else {
+      process.env.ImageOS = originalImageOS;
+    }
   },
 );
 
@@ -182,6 +204,10 @@ test.each([
     jest.spyOn(os, "platform").mockReturnValue("linux");
     jest.spyOn(os, "arch").mockReturnValue(inputArch);
 
+    // Mock ImageOS environment variable
+    const originalImageOS = process.env.ImageOS;
+    process.env.ImageOS = "ubuntu22";
+
     core.getBooleanInput = jest.fn().mockReturnValue(true);
     core.getInput = jest.fn().mockReturnValueOnce("");
 
@@ -208,6 +234,13 @@ test.each([
     expect(cache.restoreCache).toHaveBeenCalledTimes(1);
     expect(cache.saveCache).toHaveBeenCalledTimes(1);
     expect(core.addPath).toHaveBeenCalled();
+
+    // Restore original ImageOS
+    if (originalImageOS === undefined) {
+      delete process.env.ImageOS;
+    } else {
+      process.env.ImageOS = originalImageOS;
+    }
   },
 );
 
@@ -248,6 +281,10 @@ test.each([
   jest.spyOn(os, "platform").mockReturnValue("linux");
   jest.spyOn(os, "arch").mockReturnValue(test.arch);
 
+  // Mock ImageOS environment variable
+  const originalImageOS = process.env.ImageOS;
+  process.env.ImageOS = "ubuntu22";
+
   const getMock = jest
     .spyOn(httpm.HttpClient.prototype, "get")
     .mockResolvedValue({
@@ -283,6 +320,13 @@ test.each([
   expect(cache.restoreCache).toHaveBeenCalledTimes(1);
   expect(cache.saveCache).toHaveBeenCalledTimes(1);
   expect(core.addPath).toHaveBeenCalled();
+
+  // Restore original ImageOS
+  if (originalImageOS === undefined) {
+    delete process.env.ImageOS;
+  } else {
+    process.env.ImageOS = originalImageOS;
+  }
 });
 
 test.each([
