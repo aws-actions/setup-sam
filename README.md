@@ -25,7 +25,7 @@ jobs:
         with:
           use-installer: true
           token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.ASSUME_ROLE_ARN }}
           role-session-name: ci
