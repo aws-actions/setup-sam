@@ -18,5 +18,5 @@ inputs:
     description: "Authentication token to be used to call GITHUB Apis"
     required: false
 runs:
-  using: "node20"
-  main: "dist/index.js"
+  using: node24
+  main: dist/index.js
