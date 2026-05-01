@@ -13,5 +13,5 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: |
-          git tag --force v2 HEAD
-          git push --force origin v2
+          git tag --force v3 HEAD
+          git push --force origin v3
