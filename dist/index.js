@@ -315,7 +315,11 @@ async function installWindowsNativeInstaller(inputVersion) {
   }
 
   try {
-    const msiPath = await tc.downloadTool(url);
+    // Windows Installer dispatches by file extension, so the destination
+    // path must end in `.msi` — tc.downloadTool's default UUID filename
+    // makes msiexec fail with exit code 1603.
+    const msiDest = path.join(mkdirTemp(), "AWS_SAM_CLI_64_PY3.msi");
+    const msiPath = await tc.downloadTool(url, msiDest);
     await runMsiExec(msiPath);
   } catch (error) {
     core.setFailed(`Failed to install SAM CLI MSI: ${error.message}`);

@@ -484,12 +484,13 @@ describe("Windows native installer", () => {
 
     expect(tc.downloadTool).toHaveBeenCalledWith(
       "https://github.com/aws/aws-sam-cli/releases/download/v1.139.0/AWS_SAM_CLI_64_PY3.msi",
+      expect.stringMatching(/AWS_SAM_CLI_64_PY3\.msi$/),
     );
     expect(exec.exec).toHaveBeenCalledWith(
       "msiexec",
       expect.arrayContaining([
         "/i",
-        "/tmp/AWS_SAM_CLI_64_PY3.msi",
+        expect.stringMatching(/AWS_SAM_CLI_64_PY3\.msi$/),
         "/qn",
         "/norestart",
       ]),
@@ -510,6 +511,7 @@ describe("Windows native installer", () => {
 
     expect(tc.downloadTool).toHaveBeenCalledWith(
       "https://github.com/aws/aws-sam-cli/releases/latest/download/AWS_SAM_CLI_64_PY3.msi",
+      expect.stringMatching(/AWS_SAM_CLI_64_PY3\.msi$/),
     );
     expect(core.addPath).toHaveBeenCalledWith(stableBinDir);
   });
@@ -529,6 +531,7 @@ describe("Windows native installer", () => {
 
     expect(tc.downloadTool).toHaveBeenCalledWith(
       "https://github.com/aws/aws-sam-cli/releases/download/sam-cli-nightly/AWS_SAM_CLI_64_PY3.msi",
+      expect.stringMatching(/AWS_SAM_CLI_64_PY3\.msi$/),
     );
     expect(core.addPath).toHaveBeenCalledWith(nightlyBinDir);
     // Both sam.cmd and sam.exe should have been copied from the nightly variants
