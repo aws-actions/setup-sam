@@ -37,15 +37,15 @@ jobs:
         uses: ./
         with:
           use-installer: true
-          version: "1.104.0"
-      - run: sam --version | grep -F 1.104.0
+          version: "1.159.1"
+      - run: sam --version | grep -F 1.159.1
 
       - name: Test official installer (pinned version; should use cache)
         uses: ./
         with:
           use-installer: true
-          version: "1.104.0"
-      - run: sam --version | grep -F 1.104.0
+          version: "1.159.1"
+      - run: sam --version | grep -F 1.159.1
 
       - name: Test official installer (latest version)
         uses: ./
@@ -79,8 +79,8 @@ jobs:
         uses: ./
         with:
           use-installer: true
-          version: "1.139.0"
-      - run: sam --version | findstr /C:"1.139.0"
+          version: "1.159.1"
+      - run: sam --version | findstr /C:"1.159.1"
         shell: cmd
 
       - name: Test MSI installer (latest version)
@@ -117,8 +117,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       # Set SAM versions based on Python version
-      SAM_VERSION: ${{ contains(fromJson('["3.12", "3.13"]'), matrix.python) && '1.128.0' || '1.18.2' }}
-      INSTALLER_VERSION: ${{ contains( matrix.os, '-arm') && '1.130.0' || '1.71.0' }}
+      SAM_VERSION: ${{ contains(fromJson('["3.12", "3.13"]'), matrix.python) && '1.159.1' || '1.18.2' }}
+      INSTALLER_VERSION: "1.159.1"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
