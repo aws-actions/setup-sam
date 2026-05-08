@@ -56,6 +56,48 @@ jobs:
           sam --version | grep -F "$version"
         shell: bash
 
+      - name: Test official installer (nightly version)
+        uses: ./
+        with:
+          use-installer: true
+          version: nightly
+      - run: sam --version
+
+  native-installer-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - windows-2022
+    name: Native installer (MSI) / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Test MSI installer (pinned version)
+        uses: ./
+        with:
+          use-installer: true
+          version: "1.139.0"
+      - run: sam --version | findstr /C:"1.139.0"
+        shell: cmd
+
+      - name: Test MSI installer (latest version)
+        uses: ./
+        with:
+          use-installer: true
+      - run: sam --version
+        shell: cmd
+
+      - name: Test MSI installer (nightly version)
+        uses: ./
+        with:
+          use-installer: true
+          version: nightly
+      - run: sam --version
+        shell: cmd
+
   integ:
     strategy:
       fail-fast: false

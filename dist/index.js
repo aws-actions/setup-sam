@@ -130,6 +130,16 @@ function isSemver(s) {
   return /^\d+\.\d+\.\d+$/.test(s);
 }
 
+const NIGHTLY = "nightly";
+const NIGHTLY_TAG = "sam-cli-nightly";
+
+/**
+ * Returns whether a version string requests the nightly release.
+ */
+function isNightly(version) {
+  return version === NIGHTLY;
+}
+
 /**
  * Get latest SAM CLI version from https://api.github.com/repos/aws/aws-sam-cli/releases/latest
  *
@@ -198,10 +208,12 @@ async function downloadAndCache(version, arch, installDir, cacheKey) {
  * Downloads SAM CLI without caching.
  *
  * @param {string} arch - The architecture (x86_64 or arm64).
+ * @param {string} releaseTag - Optional release tag (e.g. "sam-cli-nightly"). Defaults to latest.
  * @returns {Promise<string>} The directory SAM CLI is installed in.
  */
-async function downloadWithoutCache(arch) {
-  const url = `https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-${arch}.zip`;
+async function downloadWithoutCache(arch, releaseTag) {
+  const tagSegment = releaseTag ? `download/${releaseTag}` : "latest/download";
+  const url = `https://github.com/aws/aws-sam-cli/releases/${tagSegment}/aws-sam-cli-linux-${arch}.zip`;
   const tempDir = mkdirTemp();
 
   try {
@@ -215,32 +227,161 @@ async function downloadWithoutCache(arch) {
 }
 
 /**
- * Installs SAM CLI using the native installers.
+ * Builds the URL to the Windows MSI asset for a given release tag or version.
  *
- * See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
- *
- * @param {string} inputVersion - The SAM CLI version to install.
- * @param {string} token - Authentication Token to use for GITHUB Apis.
- * @returns {Promise<string>} The directory SAM CLI is installed in.
+ * @param {string} tagOrVersion - Either a release tag (e.g. "sam-cli-nightly")
+ *   or an empty string to use the "latest" alias.
+ * @param {boolean} isTag - True if the first arg is a release tag, false if version (x.y.z).
  */
-// TODO: Support more platforms
-async function installUsingNativeInstaller(inputVersion, token) {
-  // Validate platform
-  if (os.platform() !== "linux") {
-    core.setFailed("Only Linux is supported with use-installer: true");
+function windowsMsiUrl(tagOrVersion, isTag) {
+  const asset = "AWS_SAM_CLI_64_PY3.msi";
+  if (!tagOrVersion) {
+    return `https://github.com/aws/aws-sam-cli/releases/latest/download/${asset}`;
+  }
+  const tag = isTag ? tagOrVersion : `v${tagOrVersion}`;
+  return `https://github.com/aws/aws-sam-cli/releases/download/${tag}/${asset}`;
+}
+
+/**
+ * Runs the MSI silently via msiexec. Throws on failure.
+ *
+ * @param {string} msiPath - Path to the downloaded MSI.
+ */
+async function runMsiExec(msiPath) {
+  // 3010 = ERROR_SUCCESS_REBOOT_REQUIRED; treat as success
+  const logPath = path.join(mkdirTemp(), "msi-install.log");
+  const exitCode = await exec.exec(
+    "msiexec",
+    ["/i", msiPath, "/qn", "/norestart", "/l*v", logPath],
+    { ignoreReturnCode: true },
+  );
+  if (exitCode !== 0 && exitCode !== 3010) {
+    if (fs.existsSync(logPath)) {
+      const tail = fs.readFileSync(logPath, "utf8").split("\n").slice(-30);
+      core.warning(
+        `msiexec failed (${exitCode}); last log lines:\n${tail.join("\n")}`,
+      );
+    }
+    throw new Error(`msiexec failed with exit code ${exitCode}`);
+  }
+}
+
+/**
+ * Locates the SAM CLI bin directory created by the MSI install.
+ *
+ * Stable installs to `C:\Program Files\Amazon\AWSSAMCLI\bin`; nightly installs
+ * to `C:\Program Files\Amazon\AWSSAMCLI_NIGHTLY\bin`.
+ *
+ * @param {boolean} nightly - Whether the nightly MSI was installed.
+ */
+function findWindowsSamBinDir(nightly) {
+  const programFiles = process.env["ProgramFiles"] || "C:\\Program Files";
+  const dir = path.join(
+    programFiles,
+    "Amazon",
+    nightly ? "AWSSAMCLI_NIGHTLY" : "AWSSAMCLI",
+    "bin",
+  );
+  if (!fs.existsSync(dir)) {
+    throw new Error(`Expected SAM CLI install directory not found: ${dir}`);
+  }
+  return dir;
+}
+
+/**
+ * Installs SAM CLI on Windows by downloading and running the MSI.
+ *
+ * @param {string} inputVersion - The SAM CLI version to install or "nightly".
+ * @returns {Promise<string>} The directory containing sam.cmd / sam.exe.
+ */
+async function installWindowsNativeInstaller(inputVersion) {
+  // Validate version format (only x.y.z, "nightly", or empty are accepted)
+  if (inputVersion && !isNightly(inputVersion) && !isSemver(inputVersion)) {
+    core.setFailed('Version must be in the format x.y.z or "nightly"');
     return "";
   }
 
+  const nightly = isNightly(inputVersion);
+  const url = nightly
+    ? windowsMsiUrl(NIGHTLY_TAG, true)
+    : windowsMsiUrl(inputVersion, false);
+
+  if (nightly) {
+    core.info("Installing SAM CLI nightly release on Windows.");
+  } else {
+    core.info(
+      `Installing SAM CLI ${inputVersion || "latest"} on Windows via MSI.`,
+    );
+  }
+
+  try {
+    const msiPath = await tc.downloadTool(url);
+    await runMsiExec(msiPath);
+  } catch (error) {
+    core.setFailed(`Failed to install SAM CLI MSI: ${error.message}`);
+    return "";
+  }
+
+  let binDir;
+  try {
+    binDir = findWindowsSamBinDir(nightly);
+  } catch (error) {
+    core.setFailed(error.message);
+    return "";
+  }
+
+  // Nightly MSI ships sam-nightly.{cmd,exe}; copy to sam.{cmd,exe} so users
+  // can invoke `sam` regardless of which release they install.
+  if (nightly) {
+    for (const ext of ["cmd", "exe"]) {
+      const src = path.join(binDir, `sam-nightly.${ext}`);
+      const dst = path.join(binDir, `sam.${ext}`);
+      if (fs.existsSync(src) && !fs.existsSync(dst)) {
+        fs.copyFileSync(src, dst);
+      }
+    }
+  }
+
+  return binDir;
+}
+
+/**
+ * Installs SAM CLI on Linux using the official native installer archive.
+ *
+ * @param {string} inputVersion - The SAM CLI version to install or "nightly".
+ * @param {string} token - Authentication Token to use for GITHUB Apis.
+ * @returns {Promise<string>} The directory SAM CLI is installed in.
+ */
+async function installLinuxNativeInstaller(inputVersion, token) {
   if (os.arch() !== "x64" && os.arch() !== "arm64") {
     core.setFailed(
-      "Only x86-64 and aarch64 architectures are supported with use-installer: true",
+      "Only x86-64 and aarch64 architectures are supported with use-installer: true on Linux",
     );
     return "";
   }
 
+  const arch = os.arch() === "arm64" ? "arm64" : "x86_64";
+
+  // Nightly: download without caching since the "sam-cli-nightly" tag's
+  // contents change daily, so a cache hit would serve stale binaries.
+  if (isNightly(inputVersion)) {
+    core.info("Installing SAM CLI nightly release without caching.");
+    const binDir = await downloadWithoutCache(arch, NIGHTLY_TAG);
+    if (binDir) {
+      // The nightly archive ships `sam-nightly` instead of `sam`. Symlink so
+      // `sam` works on PATH without users having to change their commands.
+      const target = path.join(binDir, "sam-nightly");
+      const link = path.join(binDir, "sam");
+      if (fs.existsSync(target) && !fs.existsSync(link)) {
+        fs.symlinkSync(target, link);
+      }
+    }
+    return binDir;
+  }
+
   // Validate version format
   if (inputVersion && !isSemver(inputVersion)) {
-    core.setFailed("Version must be in the format x.y.z");
+    core.setFailed('Version must be in the format x.y.z or "nightly"');
     return "";
   }
 
@@ -258,7 +399,6 @@ async function installUsingNativeInstaller(inputVersion, token) {
   }
 
   // Validate ARM64 version requirement
-  const arch = os.arch() === "arm64" ? "arm64" : "x86_64";
   if (version && os.arch() === "arm64" && semverLt(version, "1.104.0")) {
     core.setFailed(
       "ARM64 installer is only available for versions 1.104.0 and above",
@@ -293,13 +433,43 @@ async function installUsingNativeInstaller(inputVersion, token) {
   return await downloadWithoutCache(arch);
 }
 
+/**
+ * Installs SAM CLI using the native installers.
+ *
+ * See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
+ *
+ * @param {string} inputVersion - The SAM CLI version to install.
+ * @param {string} token - Authentication Token to use for GITHUB Apis.
+ * @returns {Promise<string>} The directory SAM CLI is installed in.
+ */
+// TODO: Support more platforms (macOS .pkg)
+async function installUsingNativeInstaller(inputVersion, token) {
+  if (os.platform() === "linux") {
+    return await installLinuxNativeInstaller(inputVersion, token);
+  }
+  if (os.platform() === "win32") {
+    return await installWindowsNativeInstaller(inputVersion);
+  }
+  core.setFailed(
+    "use-installer: true is only supported on Linux and Windows runners",
+  );
+  return "";
+}
+
 async function setup() {
-  const version = getInput("version", /^[\d.*]*$/, "");
+  const version = getInput("version", /^([\d.*]*|nightly)$/, "");
   // python3 isn't standard on Windows
   const defaultPython = isWindows() ? "python" : "python3";
   const python = getInput("python", /^.+$/, defaultPython);
   const useInstaller = core.getBooleanInput("use-installer");
   const token = getInput("token", /^.*$/, "");
+
+  if (isNightly(version) && !useInstaller) {
+    core.setFailed(
+      'Installing the nightly release requires "use-installer: true". The aws-sam-cli nightly release is not published to PyPI.',
+    );
+    return;
+  }
 
   const binPath = useInstaller
     ? await installUsingNativeInstaller(version, token)
