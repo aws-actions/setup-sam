@@ -75,12 +75,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Pin to an older version to exercise the downgrade path: GitHub-hosted
+      # Windows runners ship a recent SAM CLI preinstalled, and Windows
+      # Installer rejects silent downgrades unless the existing product is
+      # uninstalled first. This step verifies that uninstall-before-install
+      # works regardless of which version the runner image happens to ship.
       - name: Test MSI installer (pinned version)
         uses: ./
         with:
           use-installer: true
-          version: "1.159.1"
-      - run: sam --version | findstr /C:"1.159.1"
+          version: "1.139.0"
+      - run: sam --version | findstr /C:"1.139.0"
         shell: cmd
 
       - name: Test MSI installer (latest version)

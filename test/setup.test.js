@@ -430,21 +430,22 @@ describe("Windows native installer", () => {
 
   // path.join uses the host OS separator, so compute expected dirs the same way
   // the production code does to keep these tests cross-platform.
-  const stableBinDir = path.join(
+  const stableInstallRoot = path.join(
     "C:\\Program Files",
     "Amazon",
     "AWSSAMCLI",
-    "bin",
   );
-  const nightlyBinDir = path.join(
+  const nightlyInstallRoot = path.join(
     "C:\\Program Files",
     "Amazon",
     "AWSSAMCLI_NIGHTLY",
-    "bin",
   );
+  const stableBinDir = path.join(stableInstallRoot, "bin");
+  const nightlyBinDir = path.join(nightlyInstallRoot, "bin");
 
   let existsSyncSpy;
   let copyFileSyncSpy;
+  let writeFileSyncSpy;
   let originalProgramFiles;
 
   beforeEach(() => {
@@ -457,6 +458,9 @@ describe("Windows native installer", () => {
     copyFileSyncSpy = jest
       .spyOn(fs, "copyFileSync")
       .mockImplementation(() => {});
+    writeFileSyncSpy = jest
+      .spyOn(fs, "writeFileSync")
+      .mockImplementation(() => {});
 
     tc.downloadTool = jest
       .fn()
@@ -467,6 +471,7 @@ describe("Windows native installer", () => {
   afterEach(() => {
     existsSyncSpy.mockRestore();
     copyFileSyncSpy.mockRestore();
+    writeFileSyncSpy.mockRestore();
     if (originalProgramFiles === undefined) {
       delete process.env["ProgramFiles"];
     } else {
@@ -599,6 +604,72 @@ describe("Windows native installer", () => {
       ),
     );
     expect(tc.downloadTool).not.toHaveBeenCalled();
+  });
+
+  test("uninstalls preinstalled stable SAM CLI before installing pinned version", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("1.139.0");
+
+    // Pretend a stable SAM CLI is already installed (install root exists),
+    // and the bin dir exists after the new install completes.
+    existsSyncSpy.mockImplementation(
+      (p) => p === stableInstallRoot || p === stableBinDir,
+    );
+
+    await setup();
+
+    // PowerShell uninstall is invoked with the stable install root passed
+    // as the script argument, then msiexec /i runs for the new MSI.
+    const calls = exec.exec.mock.calls;
+    const uninstallCall = calls.find((c) => c[0] === "powershell");
+    expect(uninstallCall).toBeDefined();
+    expect(uninstallCall[1]).toEqual(expect.arrayContaining(["-File"]));
+    expect(uninstallCall[1][uninstallCall[1].length - 1]).toBe(
+      stableInstallRoot,
+    );
+
+    const installCall = calls.find((c) => c[0] === "msiexec");
+    expect(installCall).toBeDefined();
+    expect(calls.indexOf(uninstallCall)).toBeLessThan(
+      calls.indexOf(installCall),
+    );
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  test("skips uninstall when no existing install is present", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("1.139.0");
+
+    // Install root does not exist before install; bin dir appears after.
+    existsSyncSpy.mockImplementation((p) => p === stableBinDir);
+
+    await setup();
+
+    expect(
+      exec.exec.mock.calls.find((c) => c[0] === "powershell"),
+    ).toBeUndefined();
+    expect(exec.exec.mock.calls.find((c) => c[0] === "msiexec")).toBeDefined();
+  });
+
+  test("uninstall targets nightly install root for nightly install", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("nightly");
+
+    const samNightlyCmd = path.join(nightlyBinDir, "sam-nightly.cmd");
+    existsSyncSpy.mockImplementation(
+      (p) =>
+        p === nightlyInstallRoot || p === nightlyBinDir || p === samNightlyCmd,
+    );
+
+    await setup();
+
+    const uninstallCall = exec.exec.mock.calls.find(
+      (c) => c[0] === "powershell",
+    );
+    expect(uninstallCall).toBeDefined();
+    expect(uninstallCall[1][uninstallCall[1].length - 1]).toBe(
+      nightlyInstallRoot,
+    );
   });
 });
 
