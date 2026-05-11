@@ -37,15 +37,15 @@ jobs:
         uses: ./
         with:
           use-installer: true
-          version: "1.104.0"
-      - run: sam --version | grep -F 1.104.0
+          version: "1.159.1"
+      - run: sam --version | grep -F 1.159.1
 
       - name: Test official installer (pinned version; should use cache)
         uses: ./
         with:
           use-installer: true
-          version: "1.104.0"
-      - run: sam --version | grep -F 1.104.0
+          version: "1.159.1"
+      - run: sam --version | grep -F 1.159.1
 
       - name: Test official installer (latest version)
         uses: ./
@@ -55,6 +55,53 @@ jobs:
           version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
           sam --version | grep -F "$version"
         shell: bash
+
+      - name: Test official installer (nightly version)
+        uses: ./
+        with:
+          use-installer: true
+          version: nightly
+      - run: sam --version
+
+  native-installer-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - windows-2022
+    name: Native installer (MSI) / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # Pin to an older version to exercise the downgrade path: GitHub-hosted
+      # Windows runners ship a recent SAM CLI preinstalled, and Windows
+      # Installer rejects silent downgrades unless the existing product is
+      # uninstalled first. This step verifies that uninstall-before-install
+      # works regardless of which version the runner image happens to ship.
+      - name: Test MSI installer (pinned version)
+        uses: ./
+        with:
+          use-installer: true
+          version: "1.139.0"
+      - run: sam --version | findstr /C:"1.139.0"
+        shell: cmd
+
+      - name: Test MSI installer (latest version)
+        uses: ./
+        with:
+          use-installer: true
+      - run: sam --version
+        shell: cmd
+
+      - name: Test MSI installer (nightly version)
+        uses: ./
+        with:
+          use-installer: true
+          version: nightly
+      - run: sam --version
+        shell: cmd
 
   integ:
     strategy:
@@ -75,8 +122,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       # Set SAM versions based on Python version
-      SAM_VERSION: ${{ contains(fromJson('["3.12", "3.13"]'), matrix.python) && '1.128.0' || '1.18.2' }}
-      INSTALLER_VERSION: ${{ contains( matrix.os, '-arm') && '1.130.0' || '1.71.0' }}
+      SAM_VERSION: ${{ contains(fromJson('["3.12", "3.13"]'), matrix.python) && '1.159.1' || '1.18.2' }}
+      INSTALLER_VERSION: "1.159.1"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6

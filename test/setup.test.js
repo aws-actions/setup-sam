@@ -377,3 +377,316 @@ test.each([["x64"], ["arm64"]])(
     }
   },
 );
+
+test.each([
+  ["x64", "x86_64"],
+  ["arm64", "arm64"],
+])(
+  "when use-installer enabled and version is nightly, downloads from sam-cli-nightly tag without caching (Linux %s)",
+  async (inputArch, expectedArch) => {
+    jest.spyOn(os, "platform").mockReturnValue("linux");
+    jest.spyOn(os, "arch").mockReturnValue(inputArch);
+
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("nightly");
+
+    tc.extractZip = jest.fn().mockResolvedValueOnce(undefined);
+    tc.downloadTool = jest
+      .fn()
+      .mockResolvedValueOnce("/path/to/downloaded/sam");
+
+    await setup();
+
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      `https://github.com/aws/aws-sam-cli/releases/download/sam-cli-nightly/aws-sam-cli-linux-${expectedArch}.zip`,
+    );
+
+    expect(cache.restoreCache).toHaveBeenCalledTimes(0);
+    expect(cache.saveCache).toHaveBeenCalledTimes(0);
+    expect(core.addPath).toHaveBeenCalled();
+    expect(core.setFailed).not.toHaveBeenCalled();
+  },
+);
+
+test("when version is nightly but use-installer is false, fails with descriptive error", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+
+  core.getBooleanInput = jest.fn().mockReturnValue(false);
+  core.getInput = jest.fn().mockReturnValueOnce("nightly");
+
+  await setup();
+
+  expect(core.setFailed).toHaveBeenCalledWith(
+    expect.stringContaining('"use-installer: true"'),
+  );
+  expect(io.which).not.toHaveBeenCalled();
+  expect(tc.downloadTool).not.toHaveBeenCalled();
+  expect(core.addPath).not.toHaveBeenCalled();
+});
+
+describe("Windows native installer", () => {
+  const fs = require("fs");
+  const path = require("path");
+
+  // path.join uses the host OS separator, so compute expected dirs the same way
+  // the production code does to keep these tests cross-platform.
+  const stableInstallRoot = path.join(
+    "C:\\Program Files",
+    "Amazon",
+    "AWSSAMCLI",
+  );
+  const nightlyInstallRoot = path.join(
+    "C:\\Program Files",
+    "Amazon",
+    "AWSSAMCLI_NIGHTLY",
+  );
+  const stableBinDir = path.join(stableInstallRoot, "bin");
+  const nightlyBinDir = path.join(nightlyInstallRoot, "bin");
+
+  let existsSyncSpy;
+  let copyFileSyncSpy;
+  let writeFileSyncSpy;
+  let originalProgramFiles;
+
+  beforeEach(() => {
+    originalProgramFiles = process.env["ProgramFiles"];
+    process.env["ProgramFiles"] = "C:\\Program Files";
+
+    jest.spyOn(os, "platform").mockReturnValue("win32");
+
+    existsSyncSpy = jest.spyOn(fs, "existsSync");
+    copyFileSyncSpy = jest
+      .spyOn(fs, "copyFileSync")
+      .mockImplementation(() => {});
+    writeFileSyncSpy = jest
+      .spyOn(fs, "writeFileSync")
+      .mockImplementation(() => {});
+
+    tc.downloadTool = jest
+      .fn()
+      .mockResolvedValue("/tmp/AWS_SAM_CLI_64_PY3.msi");
+    exec.exec = jest.fn().mockResolvedValue(0);
+  });
+
+  afterEach(() => {
+    existsSyncSpy.mockRestore();
+    copyFileSyncSpy.mockRestore();
+    writeFileSyncSpy.mockRestore();
+    if (originalProgramFiles === undefined) {
+      delete process.env["ProgramFiles"];
+    } else {
+      process.env["ProgramFiles"] = originalProgramFiles;
+    }
+  });
+
+  test("downloads MSI for a pinned version and runs msiexec", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("1.139.0");
+
+    existsSyncSpy.mockImplementation((p) => p === stableBinDir);
+
+    await setup();
+
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      "https://github.com/aws/aws-sam-cli/releases/download/v1.139.0/AWS_SAM_CLI_64_PY3.msi",
+      expect.stringMatching(/AWS_SAM_CLI_64_PY3\.msi$/),
+    );
+    expect(exec.exec).toHaveBeenCalledWith(
+      "msiexec",
+      expect.arrayContaining([
+        "/i",
+        expect.stringMatching(/AWS_SAM_CLI_64_PY3\.msi$/),
+        "/qn",
+        "/norestart",
+      ]),
+      expect.objectContaining({ ignoreReturnCode: true }),
+    );
+    expect(core.addPath).toHaveBeenCalledWith(stableBinDir);
+    expect(copyFileSyncSpy).not.toHaveBeenCalled();
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  test("downloads MSI from latest URL when no version is provided", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("");
+
+    existsSyncSpy.mockImplementation((p) => p === stableBinDir);
+
+    await setup();
+
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      "https://github.com/aws/aws-sam-cli/releases/latest/download/AWS_SAM_CLI_64_PY3.msi",
+      expect.stringMatching(/AWS_SAM_CLI_64_PY3\.msi$/),
+    );
+    expect(core.addPath).toHaveBeenCalledWith(stableBinDir);
+  });
+
+  test("nightly: downloads from sam-cli-nightly tag and aliases sam-nightly to sam", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("nightly");
+
+    // Pretend the nightly install dir and sam-nightly.* exist; sam.* does not yet.
+    const samNightlyCmd = path.join(nightlyBinDir, "sam-nightly.cmd");
+    const samNightlyExe = path.join(nightlyBinDir, "sam-nightly.exe");
+    existsSyncSpy.mockImplementation(
+      (p) => p === nightlyBinDir || p === samNightlyCmd || p === samNightlyExe,
+    );
+
+    await setup();
+
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      "https://github.com/aws/aws-sam-cli/releases/download/sam-cli-nightly/AWS_SAM_CLI_64_PY3.msi",
+      expect.stringMatching(/AWS_SAM_CLI_64_PY3\.msi$/),
+    );
+    expect(core.addPath).toHaveBeenCalledWith(nightlyBinDir);
+    // Both sam.cmd and sam.exe should have been copied from the nightly variants
+    expect(copyFileSyncSpy).toHaveBeenCalledWith(
+      samNightlyCmd,
+      path.join(nightlyBinDir, "sam.cmd"),
+    );
+    expect(copyFileSyncSpy).toHaveBeenCalledWith(
+      samNightlyExe,
+      path.join(nightlyBinDir, "sam.exe"),
+    );
+  });
+
+  test("treats msiexec exit code 3010 (reboot required) as success", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("1.139.0");
+
+    exec.exec = jest.fn().mockResolvedValue(3010);
+    existsSyncSpy.mockImplementation((p) => p === stableBinDir);
+
+    await setup();
+
+    expect(core.addPath).toHaveBeenCalled();
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  test("fails when msiexec returns a non-zero, non-3010 exit code", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("1.139.0");
+
+    exec.exec = jest.fn().mockResolvedValue(1603);
+    existsSyncSpy.mockReturnValue(false);
+
+    await setup();
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("msiexec failed with exit code 1603"),
+    );
+    expect(core.addPath).not.toHaveBeenCalled();
+  });
+
+  test("fails when expected install directory is missing after MSI completes", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("1.139.0");
+
+    existsSyncSpy.mockReturnValue(false);
+
+    await setup();
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("Expected SAM CLI install directory not found"),
+    );
+    expect(core.addPath).not.toHaveBeenCalled();
+  });
+
+  test("rejects invalid version string", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("1.2");
+
+    await setup();
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Version must be in the format x.y.z or "nightly"',
+      ),
+    );
+    expect(tc.downloadTool).not.toHaveBeenCalled();
+  });
+
+  test("uninstalls preinstalled stable SAM CLI before installing pinned version", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("1.139.0");
+
+    // Pretend a stable SAM CLI is already installed (install root exists),
+    // and the bin dir exists after the new install completes.
+    existsSyncSpy.mockImplementation(
+      (p) => p === stableInstallRoot || p === stableBinDir,
+    );
+
+    await setup();
+
+    // PowerShell uninstall is invoked with the "stable" flavor argument,
+    // then msiexec /i runs for the new MSI.
+    const calls = exec.exec.mock.calls;
+    const uninstallCall = calls.find((c) => c[0] === "powershell");
+    expect(uninstallCall).toBeDefined();
+    expect(uninstallCall[1]).toEqual(expect.arrayContaining(["-File"]));
+    expect(uninstallCall[1][uninstallCall[1].length - 1]).toBe("stable");
+
+    // The script body passed via -File should match by DisplayName, not
+    // InstallLocation (the SAM MSI doesn't populate ARPINSTALLLOCATION).
+    expect(writeFileSyncSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/uninstall-sam\.ps1$/),
+      expect.stringContaining(
+        "DisplayName -like 'AWS SAM Command Line Interface*'",
+      ),
+    );
+
+    const installCall = calls.find((c) => c[0] === "msiexec");
+    expect(installCall).toBeDefined();
+    expect(calls.indexOf(uninstallCall)).toBeLessThan(
+      calls.indexOf(installCall),
+    );
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  test("skips uninstall when no existing install is present", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("1.139.0");
+
+    // Install root does not exist before install; bin dir appears after.
+    existsSyncSpy.mockImplementation((p) => p === stableBinDir);
+
+    await setup();
+
+    expect(
+      exec.exec.mock.calls.find((c) => c[0] === "powershell"),
+    ).toBeUndefined();
+    expect(exec.exec.mock.calls.find((c) => c[0] === "msiexec")).toBeDefined();
+  });
+
+  test("uninstall targets nightly install root for nightly install", async () => {
+    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    core.getInput = jest.fn().mockReturnValueOnce("nightly");
+
+    const samNightlyCmd = path.join(nightlyBinDir, "sam-nightly.cmd");
+    existsSyncSpy.mockImplementation(
+      (p) =>
+        p === nightlyInstallRoot || p === nightlyBinDir || p === samNightlyCmd,
+    );
+
+    await setup();
+
+    const uninstallCall = exec.exec.mock.calls.find(
+      (c) => c[0] === "powershell",
+    );
+    expect(uninstallCall).toBeDefined();
+    expect(uninstallCall[1][uninstallCall[1].length - 1]).toBe("nightly");
+  });
+});
+
+test("use-installer rejected on macOS", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("darwin");
+  core.getBooleanInput = jest.fn().mockReturnValue(true);
+  core.getInput = jest.fn().mockReturnValueOnce("1.139.0");
+
+  await setup();
+
+  expect(core.setFailed).toHaveBeenCalledWith(
+    expect.stringContaining("only supported on Linux and Windows"),
+  );
+  expect(tc.downloadTool).not.toHaveBeenCalled();
+});

@@ -7,6 +7,17 @@ Action to set up [AWS SAM CLI](https://docs.aws.amazon.com/serverless-applicatio
 
 This action enables you to run AWS SAM CLI commands in order to build, package, and deploy [serverless applications](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) as part of your workflow.
 
+## Do you need this action?
+
+The AWS SAM CLI is **preinstalled on every GitHub-hosted runner image** (Ubuntu, Windows, and macOS) — see the [`runner-images`](https://github.com/actions/runner-images) repository (e.g. [Ubuntu 24.04](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md), [Ubuntu 22.04](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md), [Windows 2025](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md), [macOS 15](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)) for the exact version shipped with each image. If your workflow only needs the version that comes with the runner, you can call `sam` directly without using this action.
+
+Use this action when you need:
+
+- A **specific version** of the SAM CLI (pinned via the `version` input).
+- The **`nightly` release** of the SAM CLI to validate upcoming changes before they ship.
+- A consistent SAM CLI version across runner image upgrades.
+- The native installer on a runner where SAM CLI is not preinstalled (e.g. self-hosted runners).
+
 ## Example
 
 Assuming you have a [`samconfig.toml`](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html) at the root of your repository:
@@ -38,11 +49,29 @@ jobs:
 
 See [AWS IAM best practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html) for handling AWS credentials.
 
+### Installing the nightly release
+
+To validate your project against unreleased changes to the AWS SAM CLI:
+
+```yaml
+- uses: aws-actions/setup-sam@v3
+  with:
+    use-installer: true
+    version: nightly
+- run: sam --version
+```
+
 ## Inputs
 
 ### `version`
 
-The AWS SAM CLI version to install. Installs the latest version by default.
+The AWS SAM CLI version to install. Installs the latest stable version by default.
+
+Accepts:
+
+- An exact version (`x.y.z`, e.g. `1.139.0`) — pinned install.
+- A version pattern (`1.*`, `1.139.*`) — only when `use-installer` is `false` (resolved by `pip`).
+- `nightly` — installs the latest [nightly release](https://github.com/aws/aws-sam-cli/releases/tag/sam-cli-nightly) of the SAM CLI. Requires `use-installer: true`. Nightly releases are not cached because the `sam-cli-nightly` tag is updated in place each day.
 
 ### `use-installer`
 
@@ -50,8 +79,12 @@ The AWS SAM CLI version to install. Installs the latest version by default.
 >
 > This is the recommended approach on supported platforms. It does not require Python to be installed, and is faster than the default installation method.
 >
-> Currently supports Linux x86-64 and aarch64 (ARM) runners. For ARM architecture, only versions 1.104.0 and above are supported.
-> Set to `true` to set up AWS SAM CLI using a native installer. Defaults to `false`.
+> Currently supports:
+>
+> - Linux x86-64 and aarch64 (ARM) — uses the official archive installer. For ARM, only versions 1.104.0 and above are supported.
+> - Windows x86-64 — uses the official MSI installer (`AWS_SAM_CLI_64_PY3.msi`).
+
+Set to `true` to set up AWS SAM CLI using a native installer. Defaults to `false`. Required when `version` is set to `nightly`.
 
 ### `python`
 
