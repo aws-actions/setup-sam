@@ -618,14 +618,21 @@ describe("Windows native installer", () => {
 
     await setup();
 
-    // PowerShell uninstall is invoked with the stable install root passed
-    // as the script argument, then msiexec /i runs for the new MSI.
+    // PowerShell uninstall is invoked with the "stable" flavor argument,
+    // then msiexec /i runs for the new MSI.
     const calls = exec.exec.mock.calls;
     const uninstallCall = calls.find((c) => c[0] === "powershell");
     expect(uninstallCall).toBeDefined();
     expect(uninstallCall[1]).toEqual(expect.arrayContaining(["-File"]));
-    expect(uninstallCall[1][uninstallCall[1].length - 1]).toBe(
-      stableInstallRoot,
+    expect(uninstallCall[1][uninstallCall[1].length - 1]).toBe("stable");
+
+    // The script body passed via -File should match by DisplayName, not
+    // InstallLocation (the SAM MSI doesn't populate ARPINSTALLLOCATION).
+    expect(writeFileSyncSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/uninstall-sam\.ps1$/),
+      expect.stringContaining(
+        "DisplayName -like 'AWS SAM Command Line Interface*'",
+      ),
     );
 
     const installCall = calls.find((c) => c[0] === "msiexec");
@@ -667,9 +674,7 @@ describe("Windows native installer", () => {
       (c) => c[0] === "powershell",
     );
     expect(uninstallCall).toBeDefined();
-    expect(uninstallCall[1][uninstallCall[1].length - 1]).toBe(
-      nightlyInstallRoot,
-    );
+    expect(uninstallCall[1][uninstallCall[1].length - 1]).toBe("nightly");
   });
 });
 
