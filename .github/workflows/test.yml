@@ -40,8 +40,9 @@ jobs:
           version: "1.104.0"
       - run: sam --version | grep -F 1.104.0
 
-      - name: Test official installer (pinned version; should use cache)
+      - name: Test official installer (pinned version; no published digest, so uncached)
         uses: ./
+        id: installer-pinned-cached
         with:
           use-installer: true
           version: "1.104.0"
@@ -55,6 +56,38 @@ jobs:
           version=$(curl https://pypi.org/pypi/aws-sam-cli/json | jq -r .info.version)
           sam --version | grep -F "$version"
         shell: bash
+
+      # A version with a published SHA256 digest can be cached, so the second
+      # invocation must restore it and pass integrity verification. This is the
+      # only coverage of the verified cache-hit path against the real cache
+      # service; unit tests mock @actions/cache and cannot exercise it.
+      - name: Test verified cache (cold)
+        uses: ./
+        id: cache-cold
+        with:
+          use-installer: true
+          version: "1.166.2"
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: sam --version | grep -F 1.166.2
+
+      - name: Test verified cache (warm; must hit cache)
+        uses: ./
+        id: cache-warm
+        with:
+          use-installer: true
+          version: "1.166.2"
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: sam --version | grep -F 1.166.2
+      - name: Assert cache was used
+        run: |
+          echo "cold cache-hit=${{ steps.cache-cold.outputs.cache-hit }}"
+          echo "warm cache-hit=${{ steps.cache-warm.outputs.cache-hit }}"
+          test "${{ steps.cache-warm.outputs.cache-hit }}" = "true"
+
+      # 1.104.0 predates published asset digests, so it cannot be verified and
+      # must therefore never be served from the cache.
+      - name: Assert unverifiable version does not use the cache
+        run: test "${{ steps.installer-pinned-cached.outputs.cache-hit }}" != "true"
 
   integ:
     strategy:

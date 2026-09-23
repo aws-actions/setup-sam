@@ -17,6 +17,9 @@ inputs:
   token:
     description: "Authentication token to be used to call GITHUB Apis"
     required: false
+outputs:
+  cache-hit:
+    description: "Whether AWS SAM CLI was restored from the GitHub Actions cache and passed integrity verification"
 runs:
   using: node24
   main: dist/index.js
