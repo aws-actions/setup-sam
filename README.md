@@ -24,7 +24,6 @@ jobs:
       - uses: aws-actions/setup-sam@v3
         with:
           use-installer: true
-          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.ASSUME_ROLE_ARN }}
@@ -65,13 +64,11 @@ You can use [`actions/setup-python`](https://github.com/actions/setup-python) to
 
 ### `token`
 
-> **Note**
->
-> It is recommended to use token to have higher rate limit. Default [unauthenticated users](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api?apiVersion=2022-11-28#primary-rate-limit-for-unauthenticated-users) without a token will have a lesser rate limit enforced.
+The GITHUB Authentication token used to call the GITHUB release APIs, which `use-installer: true` reads to resolve the version to install and to obtain the published archive digest it verifies against.
 
-The GITHUB Authentication token to use for calling the GITHUB [Get the latest release](https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28#get-the-latest-release) API. Defaults to call the API as unauthenticated request if not specified.
+On `github.com` this defaults to the job's [`GITHUB_TOKEN`](https://docs.github.com/en/actions/security-guides/automatic-token-authentication), so the per-repository rate limit applies rather than the much smaller [unauthenticated limit](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api?apiVersion=2022-11-28#primary-rate-limit-for-unauthenticated-users), which is shared per IP across runners. You do not normally need to set it.
 
-The parameter can accept either [`GITHUB_TOKEN`](https://docs.github.com/en/actions/security-guides/automatic-token-authentication) or [`PAT(Personal Access Token)`](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) tokens.
+The parameter can accept either `GITHUB_TOKEN` or a [PAT (Personal Access Token)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).
 
 ## Security
 
