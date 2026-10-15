@@ -238,7 +238,7 @@ test.each([
   },
 );
 
-test("cache entry that fails verification is discarded and re-downloaded", async () => {
+test("cache entry that fails verification is ignored and the official archive is downloaded", async () => {
   jest.spyOn(os, "platform").mockReturnValue("linux");
   jest.spyOn(os, "arch").mockReturnValue("x64");
   process.env.ImageOS = "ubuntu24";
@@ -264,6 +264,9 @@ test("cache entry that fails verification is discarded and re-downloaded", async
   );
   expect(core.setOutput).toHaveBeenCalledWith("cache-hit", false);
   expect(core.setOutput).not.toHaveBeenCalledWith("cache-hit", true);
+  // The key is already taken by the entry that was just rejected, and entries
+  // are immutable, so a save could only fail after archiving ~95 MB.
+  expect(cache.saveCache).not.toHaveBeenCalled();
   expect(core.addPath).toHaveBeenCalledTimes(1);
   expect(core.setFailed).not.toHaveBeenCalled();
 });
@@ -386,7 +389,7 @@ test.each([
   },
 );
 
-test("entry that fails verification cannot be replaced, and the run says how to clear it", async () => {
+test("warning for a rejected entry says it is ignored and how to clear it", async () => {
   jest.spyOn(os, "platform").mockReturnValue("linux");
   jest.spyOn(os, "arch").mockReturnValue("x64");
   process.env.ImageOS = "ubuntu24";
@@ -396,14 +399,7 @@ test("entry that fails verification cannot be replaced, and the run says how to 
   seedCache("1.166.2", "x86_64", OTHER_ARCHIVE);
 
   cache.restoreCache = jest.fn().mockResolvedValue("cache-key-hit");
-  // Cache entries are immutable: re-saving under an occupied key is rejected.
-  cache.saveCache = jest
-    .fn()
-    .mockRejectedValue(
-      new Error(
-        "Unable to reserve cache with key, another job may be creating this cache.",
-      ),
-    );
+  cache.saveCache = jest.fn();
   tc.extractZip = jest.fn().mockResolvedValue(undefined);
   stubDownload(GOOD_ARCHIVE);
 
@@ -411,19 +407,74 @@ test("entry that fails verification cannot be replaced, and the run says how to 
 
   const key = "sam-cli-verified-linux-ubuntu24-x86_64-1.166.2";
 
-  // The entry is ignored, not discarded - the warning must not claim otherwise,
-  // and must tell the operator how to clear it, since it will otherwise be
-  // restored and rejected on every subsequent run.
+  // The entry is ignored, not discarded: it cannot be overwritten and will be
+  // restored and rejected on every run, so the warning must say how to clear it.
   const mismatchWarning = core.warning.mock.calls
     .map(([message]) => String(message))
     .find((message) => message.includes("does not match its published"));
   expect(mismatchWarning).toBeDefined();
   expect(mismatchWarning).not.toMatch(/discard/i);
   expect(mismatchWarning).toContain(`gh cache delete '${key}'`);
+});
 
-  // The run still succeeds on the freshly downloaded archive.
-  expect(tc.downloadTool).toHaveBeenCalledTimes(1);
-  expect(core.setOutput).toHaveBeenCalledWith("cache-hit", false);
+test("save that the cache service declines is not reported as a success", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
+
+  useInstaller("1.166.2");
+  mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+
+  cache.restoreCache = jest.fn().mockResolvedValue(undefined);
+  // What @actions/cache actually does when it cannot save (key already
+  // reserved, read-only cache, service error): log the reason itself and
+  // return -1. It does not throw.
+  cache.saveCache = jest.fn().mockResolvedValue(-1);
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  const infos = core.info.mock.calls.map(([message]) => String(message));
+  expect(infos).toContain(
+    "AWS SAM CLI 1.166.2 was not saved to the GitHub Actions cache",
+  );
+  expect(infos).not.toContain(
+    "Cached AWS SAM CLI 1.166.2 to GitHub Actions cache",
+  );
+  // -1 has several unrelated causes, so it must not be blamed on an existing
+  // entry or come with advice to delete one.
+  const messages = [
+    ...infos,
+    ...core.warning.mock.calls.map(([m]) => String(m)),
+  ];
+  expect(messages.some((m) => m.includes("gh cache delete"))).toBe(false);
+  // The run still succeeds on the verified download.
+  expect(core.addPath).toHaveBeenCalledTimes(1);
+  expect(core.setFailed).not.toHaveBeenCalled();
+});
+
+test("save that fails validation is reported as a warning and does not fail the run", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
+
+  useInstaller("1.166.2");
+  mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+
+  cache.restoreCache = jest.fn().mockResolvedValue(undefined);
+  // ValidationError is the one error saveCache rethrows.
+  const validationError = new Error("Key Validation Error");
+  validationError.name = "ValidationError";
+  cache.saveCache = jest.fn().mockRejectedValue(validationError);
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  expect(core.warning).toHaveBeenCalledWith(
+    expect.stringContaining("Key Validation Error"),
+  );
   expect(core.addPath).toHaveBeenCalledTimes(1);
   expect(core.setFailed).not.toHaveBeenCalled();
 });
