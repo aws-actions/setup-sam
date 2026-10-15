@@ -332,7 +332,13 @@ async function downloadVerifyAndCache(
       await cache.saveCache([archivePath], cacheKey);
       core.info(`Cached AWS SAM CLI ${version} to GitHub Actions cache`);
     } catch (error) {
-      core.warning(`Failed to save to cache: ${error.message}`);
+      // Reaching here with the key already taken means an entry exists that
+      // this run did not use - it either failed verification or was written
+      // concurrently. Cache entries are immutable, so it cannot be replaced
+      // from here; say so rather than reporting a generic save failure.
+      core.warning(
+        `Failed to save AWS SAM CLI ${version} to the GitHub Actions cache: ${error.message}`,
+      );
     }
 
     return binDir;
@@ -468,7 +474,9 @@ async function installUsingNativeInstaller(inputVersion, token) {
         return await extractArchive(archivePath);
       }
       core.warning(
-        `Cached AWS SAM CLI ${version} does not match its published SHA256 digest. Discarding the cache entry and downloading the official archive.`,
+        `Cached AWS SAM CLI ${version} does not match its published SHA256 digest, so the cached copy is being ignored and the official archive will be downloaded instead. ` +
+          `GitHub Actions cache entries are immutable, so this entry cannot be overwritten and will be skipped on every run until it is deleted: ` +
+          `gh cache delete '${cacheKey}'`,
       );
     }
   } catch (error) {

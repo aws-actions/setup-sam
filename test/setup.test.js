@@ -113,19 +113,43 @@ const GOOD_ARCHIVE = Buffer.from("official aws-sam-cli release archive");
 const GOOD_SHA256 = sha256(GOOD_ARCHIVE);
 const OTHER_ARCHIVE = Buffer.from("some other archive contents");
 
+/** A digest belonging to a different asset of the same release. */
+const DECOY_SHA256 = sha256(Buffer.from("a different architecture's archive"));
+
 /**
- * Builds a GitHub release payload, optionally carrying an asset digest.
+ * Builds a GitHub release payload.
+ *
+ * Real releases carry an archive per architecture plus installers for other
+ * platforms, so the fixture lists several assets and gives the one named by
+ * `arch` the digest under test. Every other asset carries a decoy digest, so a
+ * lookup that picks the wrong asset - by suffix, by position, or by ignoring
+ * the architecture - fails verification instead of passing by coincidence.
+ *
  * GitHub only populates `digest` for releases published after mid-2025, so
  * `digest: null` models an older release.
+ *
+ * @param {string} tag - The release tag, e.g. "v1.166.2".
+ * @param {string} arch - The architecture whose asset carries `digest`.
+ * @param {string|null} digest - Hex SHA256, or null to model an older release.
  */
 function releaseBody(tag, arch, digest) {
+  const other = arch === "arm64" ? "x86_64" : "arm64";
+  const decoy = digest ? `sha256:${DECOY_SHA256}` : null;
+
   return JSON.stringify({
     tag_name: tag,
     assets: [
+      // Deliberately listed before the asset under test so that picking the
+      // first entry, rather than matching on name, is caught.
+      { name: `aws-sam-cli-linux-${other}.zip`, digest: decoy },
+      { name: `aws-sam-cli-linux-${other}.zip.sig`, digest: decoy },
       {
         name: `aws-sam-cli-linux-${arch}.zip`,
         digest: digest ? `sha256:${digest}` : null,
       },
+      { name: `aws-sam-cli-linux-${arch}.zip.sig`, digest: decoy },
+      { name: "aws-sam-cli-macos-arm64.pkg", digest: decoy },
+      { name: "AWS_SAM_CLI_64_PY3.msi", digest: decoy },
     ],
   });
 }
@@ -322,6 +346,87 @@ test.each([
     expect(core.setFailed).not.toHaveBeenCalled();
   },
 );
+
+test.each([
+  ["not prefixed with sha256", "0".repeat(64)],
+  ["a different algorithm", `sha512:${"0".repeat(64)}`],
+  ["too short to be a sha256", "sha256:abc123"],
+  ["not hex", `sha256:${"z".repeat(64)}`],
+  ["empty", ""],
+])(
+  "digest that is %s is treated as unusable, so the cache is not used",
+  async (_label, rawDigest) => {
+    jest.spyOn(os, "platform").mockReturnValue("linux");
+    jest.spyOn(os, "arch").mockReturnValue("x64");
+    process.env.ImageOS = "ubuntu24";
+
+    useInstaller("1.166.2");
+    jest.spyOn(httpm.HttpClient.prototype, "get").mockResolvedValue({
+      message: { statusCode: 200 },
+      readBody: () =>
+        JSON.stringify({
+          tag_name: "v1.166.2",
+          assets: [{ name: "aws-sam-cli-linux-x86_64.zip", digest: rawDigest }],
+        }),
+    });
+
+    cache.restoreCache = jest.fn();
+    cache.saveCache = jest.fn();
+    tc.extractZip = jest.fn().mockResolvedValue(undefined);
+    stubDownload(GOOD_ARCHIVE);
+
+    await setup();
+
+    // An unparseable digest is no digest at all: there is nothing to verify
+    // against, so the cache must be bypassed rather than trusted.
+    expect(cache.restoreCache).not.toHaveBeenCalled();
+    expect(cache.saveCache).not.toHaveBeenCalled();
+    expect(core.addPath).toHaveBeenCalledTimes(1);
+    expect(core.setFailed).not.toHaveBeenCalled();
+  },
+);
+
+test("entry that fails verification cannot be replaced, and the run says how to clear it", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
+
+  useInstaller("1.166.2");
+  mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+  seedCache("1.166.2", "x86_64", OTHER_ARCHIVE);
+
+  cache.restoreCache = jest.fn().mockResolvedValue("cache-key-hit");
+  // Cache entries are immutable: re-saving under an occupied key is rejected.
+  cache.saveCache = jest
+    .fn()
+    .mockRejectedValue(
+      new Error(
+        "Unable to reserve cache with key, another job may be creating this cache.",
+      ),
+    );
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  const key = "sam-cli-verified-linux-ubuntu24-x86_64-1.166.2";
+
+  // The entry is ignored, not discarded - the warning must not claim otherwise,
+  // and must tell the operator how to clear it, since it will otherwise be
+  // restored and rejected on every subsequent run.
+  const mismatchWarning = core.warning.mock.calls
+    .map(([message]) => String(message))
+    .find((message) => message.includes("does not match its published"));
+  expect(mismatchWarning).toBeDefined();
+  expect(mismatchWarning).not.toMatch(/discard/i);
+  expect(mismatchWarning).toContain(`gh cache delete '${key}'`);
+
+  // The run still succeeds on the freshly downloaded archive.
+  expect(tc.downloadTool).toHaveBeenCalledTimes(1);
+  expect(core.setOutput).toHaveBeenCalledWith("cache-hit", false);
+  expect(core.addPath).toHaveBeenCalledTimes(1);
+  expect(core.setFailed).not.toHaveBeenCalled();
+});
 
 test("release metadata lookup failure falls back to an uncached download", async () => {
   jest.spyOn(os, "platform").mockReturnValue("linux");

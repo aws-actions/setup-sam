@@ -17,6 +17,13 @@ inputs:
   token:
     description: "Authentication token to be used to call GITHUB Apis"
     required: false
+    # The installer path reads the published archive digest from the release
+    # API on every run, so an unauthenticated request (60/hour per IP, shared
+    # across runners) can be exhausted by unrelated jobs and leave nothing to
+    # verify against. Default to the job's token so the limit is per repository
+    # instead. api.github.com is hardcoded, so a GitHub Enterprise Server token
+    # would be both useless here and sent off-instance - send nothing there.
+    default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
 outputs:
   cache-hit:
     description: "Whether AWS SAM CLI was restored from the GitHub Actions cache and passed integrity verification"
