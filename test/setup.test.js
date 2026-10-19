@@ -5,6 +5,7 @@ jest.mock("@actions/tool-cache");
 jest.mock("@actions/cache");
 
 const os = require("os");
+const path = require("path");
 
 const core = require("@actions/core");
 const exec = require("@actions/exec");
@@ -91,100 +92,532 @@ test.each([
   await expect(setup).rejects.toThrow(Error);
 });
 
+// ---------------------------------------------------------------------------
+// Native installer / cache integrity
+//
+// The action caches the release archive (not the extracted directory) and
+// verifies it against the SHA256 digest published on the GitHub release before
+// trusting it. Restored cache content is writable by anything that can write
+// to a cache scope the job reads, so these tests pin the verification
+// behaviour.
+// ---------------------------------------------------------------------------
+
+const fs = require("fs");
+const crypto = require("crypto");
+
+function sha256(buffer) {
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+const GOOD_ARCHIVE = Buffer.from("official aws-sam-cli release archive");
+const GOOD_SHA256 = sha256(GOOD_ARCHIVE);
+const OTHER_ARCHIVE = Buffer.from("some other archive contents");
+
+/** A digest belonging to a different asset of the same release. */
+const DECOY_SHA256 = sha256(Buffer.from("a different architecture's archive"));
+
+/**
+ * Builds a GitHub release payload.
+ *
+ * Real releases carry an archive per architecture plus installers for other
+ * platforms, so the fixture lists several assets and gives the one named by
+ * `arch` the digest under test. Every other asset carries a decoy digest, so a
+ * lookup that picks the wrong asset - by suffix, by position, or by ignoring
+ * the architecture - fails verification instead of passing by coincidence.
+ *
+ * GitHub only populates `digest` for releases published after mid-2025, so
+ * `digest: null` models an older release.
+ *
+ * @param {string} tag - The release tag, e.g. "v1.166.2".
+ * @param {string} arch - The architecture whose asset carries `digest`.
+ * @param {string|null} digest - Hex SHA256, or null to model an older release.
+ */
+function releaseBody(tag, arch, digest) {
+  const other = arch === "arm64" ? "x86_64" : "arm64";
+  const decoy = digest ? `sha256:${DECOY_SHA256}` : null;
+
+  return JSON.stringify({
+    tag_name: tag,
+    assets: [
+      // Deliberately listed before the asset under test so that picking the
+      // first entry, rather than matching on name, is caught.
+      { name: `aws-sam-cli-linux-${other}.zip`, digest: decoy },
+      { name: `aws-sam-cli-linux-${other}.zip.sig`, digest: decoy },
+      {
+        name: `aws-sam-cli-linux-${arch}.zip`,
+        digest: digest ? `sha256:${digest}` : null,
+      },
+      { name: `aws-sam-cli-linux-${arch}.zip.sig`, digest: decoy },
+      { name: "aws-sam-cli-macos-arm64.pkg", digest: decoy },
+      { name: "AWS_SAM_CLI_64_PY3.msi", digest: decoy },
+    ],
+  });
+}
+
+function mockRelease(tag, arch, digest) {
+  return jest.spyOn(httpm.HttpClient.prototype, "get").mockResolvedValue({
+    message: { statusCode: 200 },
+    readBody: () => releaseBody(tag, arch, digest),
+  });
+}
+
+let fakeHome;
+
+beforeEach(() => {
+  fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "setup-sam-home-"));
+  jest.spyOn(os, "homedir").mockReturnValue(fakeHome);
+});
+
+afterEach(() => {
+  fs.rmSync(fakeHome, { recursive: true, force: true });
+});
+
+function archivePathFor(version, arch) {
+  return path.join(
+    fakeHome,
+    ".sam-cli-cache",
+    version,
+    `aws-sam-cli-linux-${arch}.zip`,
+  );
+}
+
+/** Simulates restoreCache writing the entry back to disk. */
+function seedCache(version, arch, contents) {
+  const target = archivePathFor(version, arch);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, contents);
+  return target;
+}
+
+/** Simulates downloadTool by returning a real file on disk. */
+function stubDownload(contents) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "setup-sam-dl-"));
+  const file = path.join(dir, "download.zip");
+  fs.writeFileSync(file, contents);
+  tc.downloadTool = jest.fn().mockResolvedValue(file);
+  return file;
+}
+
+function useInstaller(version) {
+  core.getBooleanInput = jest.fn().mockReturnValue(true);
+  core.getInput = jest.fn().mockReturnValueOnce(version);
+}
+
 test.each([
-  ["x64", "x86_64", "1.104.567"],
-  ["arm64", "arm64", "1.104.0"],
-  ["x64", "x86_64", "1.23.456"],
-  ["arm64", "arm64", "1.135.0"],
+  ["x64", "x86_64", "1.166.2"],
+  ["arm64", "arm64", "1.166.2"],
+  ["x64", "x86_64", "1.140.0"],
+  ["arm64", "arm64", "1.140.0"],
 ])(
-  "when use-installer enabled and version specified and cached version exists, uses cached version %s",
-  async (inputArch, expectedArch, input) => {
+  "cache hit whose archive matches the published digest is used (%s %s %s)",
+  async (inputArch, expectedArch, version) => {
     jest.spyOn(os, "platform").mockReturnValue("linux");
     jest.spyOn(os, "arch").mockReturnValue(inputArch);
+    process.env.ImageOS = "ubuntu24";
 
-    // Mock ImageOS environment variable
-    const originalImageOS = process.env.ImageOS;
-    process.env.ImageOS = "ubuntu22";
+    useInstaller(version);
+    mockRelease(`v${version}`, expectedArch, GOOD_SHA256);
+    seedCache(version, expectedArch, GOOD_ARCHIVE);
 
-    core.getBooleanInput = jest.fn().mockReturnValue(true);
-    core.getInput = jest.fn().mockReturnValueOnce(input);
-
-    cache.restoreCache = jest.fn().mockResolvedValueOnce("cache-key-hit");
+    cache.restoreCache = jest.fn().mockResolvedValue("cache-key-hit");
+    tc.extractZip = jest.fn().mockResolvedValue(undefined);
+    tc.downloadTool = jest.fn();
 
     await setup();
 
-    expect(cache.restoreCache).toHaveBeenCalledTimes(1);
     expect(cache.restoreCache).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.stringContaining(".sam-cli-cache")]),
-      `sam-cli-linux-ubuntu22-${expectedArch}-${input}`,
+      [archivePathFor(version, expectedArch)],
+      `sam-cli-verified-linux-ubuntu24-${expectedArch}-${version}`,
     );
-    expect(cache.saveCache).toHaveBeenCalledTimes(0);
-    expect(tc.downloadTool).toHaveBeenCalledTimes(0);
+    expect(tc.downloadTool).not.toHaveBeenCalled();
+    expect(cache.saveCache).not.toHaveBeenCalled();
+    expect(tc.extractZip).toHaveBeenCalledTimes(1);
+    expect(core.setOutput).toHaveBeenCalledWith("cache-hit", true);
+    expect(core.addPath).toHaveBeenCalledTimes(1);
+    expect(core.setFailed).not.toHaveBeenCalled();
+  },
+);
 
-    expect(core.addPath).toHaveBeenCalled();
+test("cache entry that fails verification is ignored and the official archive is downloaded", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
 
-    // Restore original ImageOS
-    if (originalImageOS === undefined) {
-      delete process.env.ImageOS;
-    } else {
-      process.env.ImageOS = originalImageOS;
-    }
+  useInstaller("1.166.2");
+  mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+  // The cache holds something other than the official archive.
+  seedCache("1.166.2", "x86_64", OTHER_ARCHIVE);
+
+  cache.restoreCache = jest.fn().mockResolvedValue("cache-key-hit");
+  cache.saveCache = jest.fn().mockResolvedValue(1);
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  expect(core.warning).toHaveBeenCalledWith(
+    expect.stringContaining("does not match its published SHA256 digest"),
+  );
+  // Falls back to the official download rather than trusting the cache.
+  expect(tc.downloadTool).toHaveBeenCalledWith(
+    "https://github.com/aws/aws-sam-cli/releases/download/v1.166.2/aws-sam-cli-linux-x86_64.zip",
+  );
+  expect(core.setOutput).toHaveBeenCalledWith("cache-hit", false);
+  expect(core.setOutput).not.toHaveBeenCalledWith("cache-hit", true);
+  // The key is already taken by the entry that was just rejected, and entries
+  // are immutable, so a save could only fail after archiving ~95 MB.
+  expect(cache.saveCache).not.toHaveBeenCalled();
+  expect(core.addPath).toHaveBeenCalledTimes(1);
+  expect(core.setFailed).not.toHaveBeenCalled();
+});
+
+test("cache miss downloads, verifies, then caches the archive", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
+
+  useInstaller("1.166.2");
+  mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+
+  cache.restoreCache = jest.fn().mockResolvedValue(undefined);
+  cache.saveCache = jest.fn().mockResolvedValue(1);
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  expect(tc.downloadTool).toHaveBeenCalledTimes(1);
+  expect(cache.saveCache).toHaveBeenCalledWith(
+    [archivePathFor("1.166.2", "x86_64")],
+    "sam-cli-verified-linux-ubuntu24-x86_64-1.166.2",
+  );
+  expect(core.addPath).toHaveBeenCalledTimes(1);
+  expect(core.setFailed).not.toHaveBeenCalled();
+});
+
+test("downloaded archive that fails verification is not used or cached", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
+
+  useInstaller("1.166.2");
+  mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+
+  cache.restoreCache = jest.fn().mockResolvedValue(undefined);
+  cache.saveCache = jest.fn().mockResolvedValue(1);
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  // The download itself does not match the published digest.
+  stubDownload(OTHER_ARCHIVE);
+
+  await setup();
+
+  expect(core.setFailed).toHaveBeenCalledWith(
+    expect.stringContaining("does not match its published SHA256 digest"),
+  );
+  expect(cache.saveCache).not.toHaveBeenCalled();
+  expect(core.addPath).not.toHaveBeenCalled();
+});
+
+test.each([
+  ["x64", "x86_64"],
+  ["arm64", "arm64"],
+])(
+  "version without a published digest is downloaded without using the cache (%s)",
+  async (inputArch, expectedArch) => {
+    jest.spyOn(os, "platform").mockReturnValue("linux");
+    jest.spyOn(os, "arch").mockReturnValue(inputArch);
+    process.env.ImageOS = "ubuntu24";
+
+    useInstaller("1.104.0");
+    // Releases published before mid-2025 carry no asset digest.
+    mockRelease("v1.104.0", expectedArch, null);
+
+    cache.restoreCache = jest.fn();
+    cache.saveCache = jest.fn();
+    tc.extractZip = jest.fn().mockResolvedValue(undefined);
+    stubDownload(GOOD_ARCHIVE);
+
+    await setup();
+
+    expect(cache.restoreCache).not.toHaveBeenCalled();
+    expect(cache.saveCache).not.toHaveBeenCalled();
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      `https://github.com/aws/aws-sam-cli/releases/download/v1.104.0/aws-sam-cli-linux-${expectedArch}.zip`,
+    );
+    expect(core.setOutput).toHaveBeenCalledWith("cache-hit", false);
+    expect(core.addPath).toHaveBeenCalledTimes(1);
+    expect(core.setFailed).not.toHaveBeenCalled();
   },
 );
 
 test.each([
-  ["x64", "x86_64", "1.104.567"],
-  ["arm64", "arm64", "1.104.0"],
-  ["x64", "x86_64", "1.23.456"],
-  ["arm64", "arm64", "1.135.0"],
+  ["not prefixed with sha256", "0".repeat(64)],
+  ["a different algorithm", `sha512:${"0".repeat(64)}`],
+  ["too short to be a sha256", "sha256:abc123"],
+  ["not hex", `sha256:${"z".repeat(64)}`],
+  ["empty", ""],
 ])(
-  "when use-installer enabled and version specified and cached version does not exist, downloads and caches version %s",
-  async (inputArch, expectedArch, input) => {
+  "digest that is %s is treated as unusable, so the cache is not used",
+  async (_label, rawDigest) => {
     jest.spyOn(os, "platform").mockReturnValue("linux");
-    jest.spyOn(os, "arch").mockReturnValue(inputArch);
+    jest.spyOn(os, "arch").mockReturnValue("x64");
+    process.env.ImageOS = "ubuntu24";
 
-    // Mock ImageOS environment variable
-    const originalImageOS = process.env.ImageOS;
-    process.env.ImageOS = "ubuntu22";
+    useInstaller("1.166.2");
+    jest.spyOn(httpm.HttpClient.prototype, "get").mockResolvedValue({
+      message: { statusCode: 200 },
+      readBody: () =>
+        JSON.stringify({
+          tag_name: "v1.166.2",
+          assets: [{ name: "aws-sam-cli-linux-x86_64.zip", digest: rawDigest }],
+        }),
+    });
 
-    core.getBooleanInput = jest.fn().mockReturnValue(true);
-    core.getInput = jest.fn().mockReturnValueOnce(input);
-
-    cache.restoreCache = jest.fn().mockResolvedValueOnce(undefined);
-    cache.saveCache = jest.fn().mockResolvedValueOnce(1);
-    tc.extractZip = jest.fn().mockResolvedValueOnce(undefined);
-    tc.downloadTool = jest
-      .fn()
-      .mockResolvedValueOnce("/path/to/downloaded/sam");
+    cache.restoreCache = jest.fn();
+    cache.saveCache = jest.fn();
+    tc.extractZip = jest.fn().mockResolvedValue(undefined);
+    stubDownload(GOOD_ARCHIVE);
 
     await setup();
 
-    expect(cache.restoreCache).toHaveBeenCalledTimes(1);
-    expect(tc.downloadTool).toHaveBeenCalledTimes(1);
-    expect(tc.extractZip).toHaveBeenCalledTimes(1);
-    expect(cache.saveCache).toHaveBeenCalledTimes(1);
-    expect(cache.saveCache).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.stringContaining(".sam-cli-cache")]),
-      `sam-cli-linux-ubuntu22-${expectedArch}-${input}`,
-    );
-
-    expect(core.addPath).toHaveBeenCalled();
-
-    // Restore original ImageOS
-    if (originalImageOS === undefined) {
-      delete process.env.ImageOS;
-    } else {
-      process.env.ImageOS = originalImageOS;
-    }
+    // An unparseable digest is no digest at all: there is nothing to verify
+    // against, so the cache must be bypassed rather than trusted.
+    expect(cache.restoreCache).not.toHaveBeenCalled();
+    expect(cache.saveCache).not.toHaveBeenCalled();
+    expect(core.addPath).toHaveBeenCalledTimes(1);
+    expect(core.setFailed).not.toHaveBeenCalled();
   },
 );
 
-test("when use-installer enabled and version is too old for ARM, fails on ARM architecture", async () => {
+test("warning for a rejected entry says it is ignored and how to clear it", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
+
+  useInstaller("1.166.2");
+  mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+  seedCache("1.166.2", "x86_64", OTHER_ARCHIVE);
+
+  cache.restoreCache = jest.fn().mockResolvedValue("cache-key-hit");
+  cache.saveCache = jest.fn();
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  const key = "sam-cli-verified-linux-ubuntu24-x86_64-1.166.2";
+
+  // The entry is ignored, not discarded: it cannot be overwritten and will be
+  // restored and rejected on every run, so the warning must say how to clear it.
+  const mismatchWarning = core.warning.mock.calls
+    .map(([message]) => String(message))
+    .find((message) => message.includes("does not match its published"));
+  expect(mismatchWarning).toBeDefined();
+  expect(mismatchWarning).not.toMatch(/discard/i);
+  expect(mismatchWarning).toContain(`gh cache delete '${key}'`);
+});
+
+test("save that the cache service declines is not reported as a success", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
+
+  useInstaller("1.166.2");
+  mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+
+  cache.restoreCache = jest.fn().mockResolvedValue(undefined);
+  // What @actions/cache actually does when it cannot save (key already
+  // reserved, read-only cache, service error): log the reason itself and
+  // return -1. It does not throw.
+  cache.saveCache = jest.fn().mockResolvedValue(-1);
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  const infos = core.info.mock.calls.map(([message]) => String(message));
+  expect(infos).toContain(
+    "AWS SAM CLI 1.166.2 was not saved to the GitHub Actions cache",
+  );
+  expect(infos).not.toContain(
+    "Cached AWS SAM CLI 1.166.2 to GitHub Actions cache",
+  );
+  // -1 has several unrelated causes, so it must not be blamed on an existing
+  // entry or come with advice to delete one.
+  const messages = [
+    ...infos,
+    ...core.warning.mock.calls.map(([m]) => String(m)),
+  ];
+  expect(messages.some((m) => m.includes("gh cache delete"))).toBe(false);
+  // The run still succeeds on the verified download.
+  expect(core.addPath).toHaveBeenCalledTimes(1);
+  expect(core.setFailed).not.toHaveBeenCalled();
+});
+
+test("save that fails validation is reported as a warning and does not fail the run", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
+
+  useInstaller("1.166.2");
+  mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+
+  cache.restoreCache = jest.fn().mockResolvedValue(undefined);
+  // ValidationError is the one error saveCache rethrows.
+  const validationError = new Error("Key Validation Error");
+  validationError.name = "ValidationError";
+  cache.saveCache = jest.fn().mockRejectedValue(validationError);
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  expect(core.warning).toHaveBeenCalledWith(
+    expect.stringContaining("Key Validation Error"),
+  );
+  expect(core.addPath).toHaveBeenCalledTimes(1);
+  expect(core.setFailed).not.toHaveBeenCalled();
+});
+
+test("release metadata lookup failure falls back to an uncached download", async () => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue("x64");
+  process.env.ImageOS = "ubuntu24";
+
+  useInstaller("1.166.2");
+  jest
+    .spyOn(httpm.HttpClient.prototype, "get")
+    .mockRejectedValue(new Error("Mocked exception"));
+
+  cache.restoreCache = jest.fn();
+  cache.saveCache = jest.fn();
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  expect(cache.restoreCache).not.toHaveBeenCalled();
+  expect(cache.saveCache).not.toHaveBeenCalled();
+  expect(tc.downloadTool).toHaveBeenCalledWith(
+    "https://github.com/aws/aws-sam-cli/releases/download/v1.166.2/aws-sam-cli-linux-x86_64.zip",
+  );
+  expect(core.addPath).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  ["x64", "x86_64"],
+  ["arm64", "arm64"],
+])(
+  "no version specified resolves latest and caches the verified archive (%s)",
+  async (inputArch, expectedArch) => {
+    jest.spyOn(os, "platform").mockReturnValue("linux");
+    jest.spyOn(os, "arch").mockReturnValue(inputArch);
+    process.env.ImageOS = "ubuntu24";
+
+    useInstaller("");
+    mockRelease("v1.166.2", expectedArch, GOOD_SHA256);
+
+    cache.restoreCache = jest.fn().mockResolvedValue(undefined);
+    cache.saveCache = jest.fn().mockResolvedValue(1);
+    tc.extractZip = jest.fn().mockResolvedValue(undefined);
+    stubDownload(GOOD_ARCHIVE);
+
+    await setup();
+
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      `https://github.com/aws/aws-sam-cli/releases/download/v1.166.2/aws-sam-cli-linux-${expectedArch}.zip`,
+    );
+    expect(cache.saveCache).toHaveBeenCalledWith(
+      [archivePathFor("1.166.2", expectedArch)],
+      `sam-cli-verified-linux-ubuntu24-${expectedArch}-1.166.2`,
+    );
+    expect(core.addPath).toHaveBeenCalledTimes(1);
+  },
+);
+
+test.each([
+  {
+    arch: "x64",
+    input: { token: undefined },
+    expected: { headers: undefined },
+  },
+  {
+    arch: "x64",
+    input: { token: "" },
+    expected: { headers: undefined },
+  },
+  {
+    arch: "x64",
+    input: { token: "1234abc" },
+    expected: { headers: { Authorization: "Bearer 1234abc" } },
+  },
+])("github api request %o", async (test) => {
+  jest.spyOn(os, "platform").mockReturnValue("linux");
+  jest.spyOn(os, "arch").mockReturnValue(test.arch);
+  process.env.ImageOS = "ubuntu24";
+
+  core.getBooleanInput = jest.fn().mockReturnValue(true);
+  core.getInput = jest
+    .fn()
+    .mockReturnValueOnce("")
+    .mockReturnValueOnce("python3")
+    .mockReturnValueOnce(test.input.token);
+
+  const getMock = mockRelease("v1.166.2", "x86_64", GOOD_SHA256);
+
+  cache.restoreCache = jest.fn().mockResolvedValue(undefined);
+  cache.saveCache = jest.fn().mockResolvedValue(1);
+  tc.extractZip = jest.fn().mockResolvedValue(undefined);
+  stubDownload(GOOD_ARCHIVE);
+
+  await setup();
+
+  expect(getMock).toHaveBeenCalledWith(
+    expect.anything(),
+    test.expected.headers,
+  );
+  expect(core.addPath).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  ["x64", "x86_64"],
+  ["arm64", "arm64"],
+])(
+  "latest release lookup failure downloads latest without caching (%s)",
+  async (inputArch, expectedArch) => {
+    jest.spyOn(os, "platform").mockReturnValue("linux");
+    jest.spyOn(os, "arch").mockReturnValue(inputArch);
+
+    useInstaller("");
+    jest
+      .spyOn(httpm.HttpClient.prototype, "get")
+      .mockRejectedValue(new Error("Mocked exception"));
+
+    cache.restoreCache = jest.fn();
+    cache.saveCache = jest.fn();
+    tc.extractZip = jest.fn().mockResolvedValue(undefined);
+    stubDownload(GOOD_ARCHIVE);
+
+    await setup();
+
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      `https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-${expectedArch}.zip`,
+    );
+    expect(cache.restoreCache).not.toHaveBeenCalled();
+    expect(cache.saveCache).not.toHaveBeenCalled();
+    expect(core.addPath).toHaveBeenCalledTimes(1);
+  },
+);
+
+test("version too old for ARM fails before any download or cache access", async () => {
   jest.spyOn(os, "platform").mockReturnValue("linux");
   jest.spyOn(os, "arch").mockReturnValue("arm64");
 
-  core.getBooleanInput = jest.fn().mockReturnValue(true);
-  core.getInput = jest.fn().mockReturnValueOnce("1.103.0");
+  useInstaller("1.103.0");
+  mockRelease("v1.103.0", "arm64", GOOD_SHA256);
+
+  cache.restoreCache = jest.fn();
+  tc.downloadTool = jest.fn();
 
   await setup();
 
@@ -195,185 +628,21 @@ test("when use-installer enabled and version is too old for ARM, fails on ARM ar
   expect(cache.restoreCache).not.toHaveBeenCalled();
 });
 
-test.each([
-  ["x64", "x86_64"],
-  ["arm64", "arm64"],
-])(
-  "when use-installer enabled and version not specified, cache latest version (Linux %s)",
-  async (inputArch, expectedArch) => {
+test.each([["x64"], ["arm64"]])(
+  "version not in x.y.z format is neither downloaded nor looked up in cache (%s)",
+  async (inputArch) => {
     jest.spyOn(os, "platform").mockReturnValue("linux");
     jest.spyOn(os, "arch").mockReturnValue(inputArch);
 
-    // Mock ImageOS environment variable
-    const originalImageOS = process.env.ImageOS;
-    process.env.ImageOS = "ubuntu22";
-
     core.getBooleanInput = jest.fn().mockReturnValue(true);
-    core.getInput = jest.fn().mockReturnValueOnce("");
-
-    jest.spyOn(httpm.HttpClient.prototype, "get").mockResolvedValue({
-      message: { statusCode: 200 },
-      readBody: () => {
-        return `{ "tag_name": "v1.139.0" }`;
-      },
-    });
-
-    cache.restoreCache = jest.fn().mockResolvedValueOnce(undefined);
-    cache.saveCache = jest.fn().mockResolvedValueOnce(1);
-    tc.extractZip = jest.fn().mockResolvedValueOnce(undefined);
-    tc.downloadTool = jest
-      .fn()
-      .mockResolvedValueOnce("/path/to/downloaded/sam");
-
-    await setup();
-
-    expect(tc.downloadTool).toHaveBeenCalledWith(
-      `https://github.com/aws/aws-sam-cli/releases/download/v1.139.0/aws-sam-cli-linux-${expectedArch}.zip`,
-    );
-
-    expect(cache.restoreCache).toHaveBeenCalledTimes(1);
-    expect(cache.saveCache).toHaveBeenCalledTimes(1);
-    expect(core.addPath).toHaveBeenCalled();
-
-    // Restore original ImageOS
-    if (originalImageOS === undefined) {
-      delete process.env.ImageOS;
-    } else {
-      process.env.ImageOS = originalImageOS;
-    }
-  },
-);
-
-test.each([
-  {
-    arch: "x64",
-    releaseTagVersion: "v1.110.0",
-    input: { userInstaller: true },
-    expected: {
-      arch: "x86_64",
-      latestVersion: "v1.110.0",
-      headers: undefined,
-    },
-  },
-  {
-    arch: "x64",
-    releaseTagVersion: "v1.110.0",
-    input: { userInstaller: true, token: "" },
-    expected: {
-      arch: "x86_64",
-      latestVersion: "v1.110.0",
-      headers: undefined,
-    },
-  },
-  {
-    arch: "x64",
-    releaseTagVersion: "v1.110.0",
-    input: { userInstaller: true, token: "1234abc" },
-    expected: {
-      arch: "x86_64",
-      latestVersion: "v1.110.0",
-      headers: {
-        Authorization: "Bearer 1234abc",
-      },
-    },
-  },
-])("github api request %o", async (test) => {
-  jest.spyOn(os, "platform").mockReturnValue("linux");
-  jest.spyOn(os, "arch").mockReturnValue(test.arch);
-
-  // Mock ImageOS environment variable
-  const originalImageOS = process.env.ImageOS;
-  process.env.ImageOS = "ubuntu22";
-
-  const getMock = jest
-    .spyOn(httpm.HttpClient.prototype, "get")
-    .mockResolvedValue({
-      message: { statusCode: 200 },
-      readBody: () => {
-        return `{ "tag_name": "${test.releaseTagVersion}" }`;
-      },
-    });
-
-  core.getBooleanInput = jest.fn().mockReturnValue(test.input.userInstaller);
-  core.getInput = jest
-    .fn()
-    .mockReturnValueOnce("")
-    .mockReturnValueOnce("python3")
-    .mockReturnValueOnce(test.input.token);
-
-  cache.restoreCache = jest.fn().mockResolvedValueOnce(undefined);
-  cache.saveCache = jest.fn().mockResolvedValueOnce(1);
-  tc.extractZip = jest.fn().mockResolvedValueOnce(undefined);
-  tc.downloadTool = jest.fn().mockResolvedValueOnce("/path/to/downloaded/sam");
-
-  await setup();
-
-  expect(getMock).toHaveBeenCalledWith(
-    expect.anything(),
-    test.expected.headers,
-  );
-
-  expect(tc.downloadTool).toHaveBeenCalledWith(
-    `https://github.com/aws/aws-sam-cli/releases/download/${test.expected.latestVersion}/aws-sam-cli-linux-${test.expected.arch}.zip`,
-  );
-
-  expect(cache.restoreCache).toHaveBeenCalledTimes(1);
-  expect(cache.saveCache).toHaveBeenCalledTimes(1);
-  expect(core.addPath).toHaveBeenCalled();
-
-  // Restore original ImageOS
-  if (originalImageOS === undefined) {
-    delete process.env.ImageOS;
-  } else {
-    process.env.ImageOS = originalImageOS;
-  }
-});
-
-test.each([
-  ["x64", "x86_64"],
-  ["arm64", "arm64"],
-])(
-  "when use-installer enabled and version not specified, downloads latest version when getLatestReleaseTag failed (Linux %s)",
-  async (archInput, expectedArch) => {
-    jest.spyOn(os, "platform").mockReturnValue("linux");
-    jest.spyOn(os, "arch").mockReturnValue(archInput);
-    jest
-      .spyOn(httpm.HttpClient.prototype, "get")
-      .mockRejectedValueOnce(new Error("Mocked exception"));
-
-    core.getBooleanInput = jest.fn().mockReturnValue(true);
-    core.getInput = jest.fn().mockReturnValueOnce("");
-
-    tc.extractZip = jest.fn().mockResolvedValueOnce(undefined);
-    tc.downloadTool = jest
-      .fn()
-      .mockResolvedValueOnce("/path/to/downloaded/sam");
-
-    await setup();
-
-    expect(tc.downloadTool).toHaveBeenCalledWith(
-      `https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-${expectedArch}.zip`,
-    );
-
-    expect(cache.restoreCache).toHaveBeenCalledTimes(0);
-    expect(cache.saveCache).toHaveBeenCalledTimes(0);
-    expect(core.addPath).toHaveBeenCalled();
-  },
-);
-
-test.each([["x64"], ["arm64"]])(
-  "when use-installer enabled but version is not in format x.y.z, not downloaded or checked in cache (Linux %s)",
-  async (archInput) => {
-    jest.spyOn(os, "platform").mockReturnValue("linux");
-    jest.spyOn(os, "arch").mockReturnValue(archInput);
-
-    core.getBooleanInput = jest.fn().mockReturnValue(true);
+    cache.restoreCache = jest.fn();
+    tc.downloadTool = jest.fn();
 
     for (const version of ["1.2", "1.*", "3"]) {
       core.getInput = jest.fn().mockReturnValueOnce(version);
       await setup();
-      expect(tc.downloadTool).toHaveBeenCalledTimes(0);
-      expect(cache.restoreCache).toHaveBeenCalledTimes(0);
+      expect(tc.downloadTool).not.toHaveBeenCalled();
+      expect(cache.restoreCache).not.toHaveBeenCalled();
     }
   },
 );
