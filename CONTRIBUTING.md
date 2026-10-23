@@ -36,6 +36,18 @@ To send us a pull request, please:
 6. [Send us a pull request](https://help.github.com/articles/creating-a-pull-request/), answering any default questions in the pull request interface.
 7. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
 
+## Releasing
+
+Maintainers release by pushing a version tag to `aws-actions/setup-sam`:
+
+```sh
+git fetch origin
+git tag v3.0.1 origin/main
+git push origin v3.0.1
+```
+
+Use semantic versioning: patch for fixes, minor for new features, major for breaking changes. The [release workflow](.github/workflows/release.yml) publishes the release and moves the major tag (e.g. `v3`). Releases can't be changed, so fix a bad release by publishing a new version. Don't create releases from the Releases page.
+
 ## Finding Contributions to Work On
 
 Looking at the [existing issues](https://github.com/aws-actions/setup-sam/issues) is a great way to find something to contribute on.
